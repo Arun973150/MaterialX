@@ -25,5 +25,6 @@ botorch>=0.11         # qNEHVI Bayesian optimization
 pandas>=2.2
 pyarrow>=15.0         # parquet datasets
 pyyaml>=6.0
+python-dotenv>=1.0    # load secrets from .env
 mlflow>=2.12
 pytest>=8.0
