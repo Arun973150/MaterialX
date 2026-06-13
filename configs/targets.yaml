@@ -1,0 +1,49 @@
+# Frozen target spec for multispectral stealth discovery (Phase 1).
+# Source: AI_Stealth_Material_Full_Solution spec, pass/fail table (Appendix B of PHASE_PLAN.md).
+# Every optimizer objective and pass/fail gate reads from this file.
+
+radar:
+  bands_ghz:
+    X:  [8.0, 12.0]
+    Ku: [12.0, 18.0]
+  full_range_ghz: [1.0, 30.0]   # data generated across full range; gated on X+Ku
+  metric: reflection_loss_db
+  threshold_db: -10.0           # < -10 dB  => > 90% absorption
+  direction: below              # value must be <= threshold
+
+ir_mwir:
+  band_um: [3.0, 5.0]
+  metric: emissivity
+  threshold: 0.3
+  direction: below
+
+ir_lwir:
+  band_um: [8.0, 14.0]
+  metric: emissivity
+  threshold: 0.3
+  direction: below
+
+visible:
+  band_nm: [400.0, 700.0]
+  metric: deltaE_cie_lab          # CIE L*a*b* color difference vs background
+  threshold: 5.0
+  direction: below
+  background:
+    name: forest_green            # CONFIGURABLE — swap per deployment terrain
+    srgb_hex: "#228B22"           # placeholder; optics.py converts sRGB -> CIE L*a*b*
+    # lab: computed by optics.py at load time
+
+nir:
+  band_um: [0.7, 1.4]
+  metric: reflectance_match_pct   # |stack - background| / background
+  threshold_pct: 15.0
+  direction: below
+
+physical:
+  weight_kg_per_m2:
+    threshold: 10.0
+    direction: below
+  operating_temp_c: [-40.0, 70.0]
+  ec_cycling:
+    min_cycles: 5000
+    max_degradation_pct: 10.0

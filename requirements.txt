@@ -1,0 +1,29 @@
+# --- Materials data (Phase 1) ---
+pymatgen>=2024.0
+mp-api>=0.41          # Materials Project (needs free API key)
+jarvis-tools>=2024.0  # JARVIS-DFT (no key needed)
+regidx>=1.0           # refractiveindex.info optical constants n,k
+
+# --- Optics forward model (Phase 2) ---
+tmm>=0.2              # Byrnes transfer-matrix method
+numpy>=1.26
+scipy>=1.11
+colour-science>=0.4   # sRGB <-> CIE L*a*b* for deltaE
+
+# --- Radar forward / surrogate (Phases 3-4) ---
+# meent installed separately on cluster (GPU): pip install meent
+# openEMS installed via system package / conda on the Linux cluster
+torch>=2.2
+scikit-learn>=1.4
+matgl>=1.2            # MEGNet/M3GNet material-property screening
+
+# --- Optimization (Phase 5) ---
+pymoo>=0.6            # NSGA-III multi-objective
+botorch>=0.11         # qNEHVI Bayesian optimization
+
+# --- Infra / tracking ---
+pandas>=2.2
+pyarrow>=15.0         # parquet datasets
+pyyaml>=6.0
+mlflow>=2.12
+pytest>=8.0
