@@ -2,7 +2,7 @@
 pymatgen>=2024.0
 mp-api>=0.41          # Materials Project (needs free API key)
 jarvis-tools>=2024.0  # JARVIS-DFT (no key needed)
-regidx>=1.0           # refractiveindex.info optical constants n,k
+refractiveindex>=0.1  # refractiveindex.info optical constants n,k (verified API)
 
 # --- Optics forward model (Phase 2) ---
 tmm>=0.2              # Byrnes transfer-matrix method
