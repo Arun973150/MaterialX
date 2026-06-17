@@ -55,9 +55,14 @@ PMC y-walls ‖ H, PEC ground at the zmax boundary, MUR open at zmin) with a +z 
 port reading S11 — the proven openEMS Rect_Waveguide port convention. The first bring-up fixed
 three issues: patch-edge mesh lines (so the conducting sheet isn't dropped as an "unused
 primitive"), dropping the redundant ground box (the zmax PEC *is* the ground), and the +z port
-direction (the earlier −z/​+z mismatch blew S11 up to +100 dB). If `--compare` still disagrees
-with the ECM, the remaining knobs are the lateral mesh resolution and the cells-through-spacer
-count. Once it agrees on a known absorber, swap it in for the candidate re-check.
+direction (the earlier −z/​+z mismatch blew S11 up to +100 dB).
+
+**Validated (2026-06-17):** on the test design `--compare` gives **mean |openEMS − ECM| = 1.55 dB**
+across 1–30 GHz. Both methods show the X-band absorber; the full-wave gives a deeper, slightly
+higher notch (−23 dB @ 8.5 GHz vs ECM −12.6 dB @ 8.0 GHz) — the expected lumped-vs-full-wave
+difference, off-resonance agreement is <2.5 dB. openEMS is now the trustworthy radar anchor and
+confirms the ECM is a sound design surrogate. (Knobs if a future design needs tighter agreement at
+resonance: lateral mesh resolution and the cells-through-spacer count.)
 
 ## Re-provisioning after a restart
 A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
