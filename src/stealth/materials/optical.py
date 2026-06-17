@@ -66,6 +66,14 @@ def optical_constants(
             f"{material.name}: no optical n,k (radar conductor - use properties.conductivity)"
         )
 
+    if material.source == "tabulated":
+        # Generated/estimated materials carry an n,k table; interpolate (clamped at edges).
+        tab = material.nk_table
+        wlg = np.asarray(tab["wl_um"], dtype=float)
+        n = np.interp(wl, wlg, np.asarray(tab["n"], dtype=float))
+        k = np.interp(wl, wlg, np.asarray(tab["k"], dtype=float))
+        return n + 1j * k
+
     raise ValueError(f"{material.name}: unknown source {material.source!r}")
 
 
