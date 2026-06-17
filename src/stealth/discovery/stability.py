@@ -45,11 +45,11 @@ def _relaxer():
     return _RELAXER
 
 
-def relax(structure):
+def relax(structure, steps: int = 60):
     """Relax geometry with the MLIP; return (relaxed_structure, max_displacement_A)."""
     import numpy as np
 
-    res = _relaxer().relax(structure, fmax=0.1, steps=200, verbose=False)
+    res = _relaxer().relax(structure, fmax=0.1, steps=steps, verbose=False)
     final = res["final_structure"]
     disp = float(np.max(np.linalg.norm(final.cart_coords - structure.cart_coords, axis=1)))
     return final, disp
@@ -107,30 +107,43 @@ def _unique_flags(structures) -> list[bool]:
     return flags
 
 
-def evaluate_sun(structures: list[tuple[str, "object"]]) -> pd.DataFrame:
-    """Run S.U.N. on (id, Structure) pairs -> per-candidate DataFrame."""
+def evaluate_sun(structures, do_relax: bool = False, relax_steps: int = 60) -> pd.DataFrame:
+    """Run S.U.N. on (id, Structure) pairs -> per-candidate DataFrame.
+
+    By default uses the generated structures as-is (MatterGen outputs are already
+    near-equilibrium) for speed; pass do_relax=True for an MLIP relaxation first.
+    """
+    from tqdm import tqdm
+
     from ..materials.sources import mp_client
 
-    relaxed = [(sid, *relax(s)) for sid, s in structures]
-    unique = _unique_flags([r[1] for r in relaxed])
+    # 1. formation energy (optionally after MLIP relaxation)
+    prepared = []
+    for sid, s in tqdm(structures, desc=("relax+eform" if do_relax else "eform"), unit="mat"):
+        struct, disp = relax(s, steps=relax_steps) if do_relax else (s, 0.0)
+        prepared.append((sid, struct, formation_energy_per_atom(struct), disp))
 
+    # 2. uniqueness among the generated set
+    unique = _unique_flags([p[1] for p in prepared])
+
+    # 3. stability (E_hull) + novelty vs Materials Project
     rows = []
     with mp_client() as mpr:
-        for (sid, rstruct, disp), uniq in zip(relaxed, unique):
+        for (sid, struct, ef, disp), uniq in zip(tqdm(prepared, desc="hull+novelty", unit="mat"), unique):
             try:
-                ehull = energy_above_hull(rstruct, formation_energy_per_atom(rstruct), mpr)
-            except Exception as exc:  # noqa: BLE001 - network/hull failures shouldn't abort the batch
+                ehull = energy_above_hull(struct, ef, mpr)
+            except Exception as exc:  # noqa: BLE001 - keep going if one hull/query fails
                 ehull = float("nan")
-                print(f"  {sid}: E_hull failed ({exc})")
-            novel = is_novel_composition(rstruct, mpr)
-            stable = ehull < EHULL_STABLE
+                tqdm.write(f"  {sid}: E_hull failed ({exc})")
+            novel = is_novel_composition(struct, mpr)
+            stable = bool(ehull < EHULL_STABLE)
             rows.append(
                 {
                     "id": sid,
-                    "formula": rstruct.composition.reduced_formula,
+                    "formula": struct.composition.reduced_formula,
                     "e_hull_ev_atom": round(ehull, 3),
                     "relax_disp_A": round(disp, 3),
-                    "stable": bool(stable),
+                    "stable": stable,
                     "unique": bool(uniq),
                     "novel": bool(novel),
                     "SUN": bool(stable and uniq and novel),
@@ -145,7 +158,7 @@ def write_report(df: pd.DataFrame, path=REPORT):
     lines = [
         "# S.U.N. validation — generated materials",
         "",
-        f"Evaluated **{n}** generated structures (MLIP relaxation + MP convex hull).",
+        f"Evaluated **{n}** generated structures (M3GNet formation energy + MP convex hull).",
         "",
         f"- **Stable** (E_hull < {EHULL_STABLE} eV/atom): {s}/{n}",
         f"- **Unique** (no duplicate among generated): {u}/{n}",
@@ -172,10 +185,11 @@ def write_report(df: pd.DataFrame, path=REPORT):
     return path
 
 
-def main(cif_dir: str | None = None) -> None:
+def main(cif_dir: str | None = None, do_relax: bool = False, relax_steps: int = 60) -> None:
     structures = load_cifs(cif_dir) if cif_dir else demo_structures()
-    print(f"S.U.N. on {len(structures)} structures (relax + hull + match)...")
-    df = evaluate_sun(structures)
+    mode = "MLIP-relax + hull + match" if do_relax else "fast (no relax) + hull + match"
+    print(f"S.U.N. on {len(structures)} structures [{mode}]...")
+    df = evaluate_sun(structures, do_relax=do_relax, relax_steps=relax_steps)
     print(df.to_string(index=False))
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(OUTPUT, index=False)
@@ -189,5 +203,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--cif-dir", default=None)
     ap.add_argument("--demo", action="store_true")
+    ap.add_argument("--relax", action="store_true", help="MLIP-relax first (slower, more accurate)")
+    ap.add_argument("--relax-steps", type=int, default=60)
     args = ap.parse_args()
-    main(cif_dir=None if args.demo else args.cif_dir)
+    main(cif_dir=None if args.demo else args.cif_dir, do_relax=args.relax, relax_steps=args.relax_steps)
