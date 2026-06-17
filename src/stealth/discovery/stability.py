@@ -70,16 +70,26 @@ def energy_above_hull(structure, ef_per_atom: float, mpr) -> float:
     compared on the same phase diagram as the MP entries.
     """
     from pymatgen.analysis.phase_diagram import PhaseDiagram
-    from pymatgen.core import Element
     from pymatgen.entries.computed_entries import ComputedEntry
 
     comp = structure.composition
-    els = sorted(comp.get_el_amt_dict())
-    pd_ = PhaseDiagram(mpr.get_entries_in_chemsys(els))
     amt = comp.get_el_amt_dict()
-    e_total = ef_per_atom * comp.num_atoms + sum(
-        amt[s] * pd_.el_refs[Element(s)].energy_per_atom for s in amt
-    )
+    entries = mpr.get_entries_in_chemsys(sorted(amt))
+    pd_ = PhaseDiagram(entries)
+
+    # Build elemental references from the raw entries. PhaseDiagram.el_refs can silently
+    # drop elements (e.g. Yb) during GGA/GGA+U mixing, which made el_refs[Element('Yb')]
+    # raise KeyError; reading the lowest-energy elemental entry directly is robust to that.
+    el_ref: dict[str, float] = {}
+    for e in entries:
+        if e.composition.is_element:
+            sym = e.composition.elements[0].symbol
+            el_ref[sym] = min(e.energy_per_atom, el_ref.get(sym, e.energy_per_atom))
+    missing = [s for s in amt if s not in el_ref]
+    if missing:
+        raise ValueError(f"no elemental reference in MP for {missing}")
+
+    e_total = ef_per_atom * comp.num_atoms + sum(amt[s] * el_ref[s] for s in amt)
     # allow_negative so below-hull (very stable) candidates return a value instead of raising.
     _, ehull = pd_.get_decomp_and_e_above_hull(ComputedEntry(comp, e_total), allow_negative=True)
     return float(ehull)

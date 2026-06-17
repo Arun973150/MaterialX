@@ -9,9 +9,9 @@ Evaluated **4** generated structures (M3GNet formation energy + MP convex hull).
 
 | id | formula | E_hull (eV/atom) | stable | unique | novel | SUN |
 |---|---|---|---|---|---|---|
-| demo-Al | Al | -0.319 | ✓ | ✓ | · | · |
-| demo-MgO | MgO | -1.065 | ✓ | ✓ | · | · |
-| demo-TiO2 | TiO2 | -0.661 | ✓ | ✓ | · | · |
-| demo-VO2 | VO2 | -0.498 | ✓ | ✓ | · | · |
+| demo-Al | Al | -0.274 | ✓ | ✓ | · | · |
+| demo-MgO | MgO | -1.011 | ✓ | ✓ | · | · |
+| demo-TiO2 | TiO2 | -0.553 | ✓ | ✓ | · | · |
+| demo-VO2 | VO2 | -0.479 | ✓ | ✓ | · | · |
 
 _E_hull is a fast-screening approximation (MLIP energy vs DFT hull); consistent-reference DFT would refine the absolute value. Stability + uniqueness + novelty together are the standard measure of generative-model quality._
