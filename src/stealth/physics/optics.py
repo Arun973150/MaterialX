@@ -58,16 +58,26 @@ def _registry_index() -> dict:
 
 
 def _layer_nk(layer: Layer, wl_um: np.ndarray, clip: bool) -> np.ndarray:
-    index = _registry_index()
-    if layer.material not in index:
-        raise KeyError(f"unknown material {layer.material!r} (not in registry)")
+    # layer.material may be a registry name (str) or a Material object (e.g. a
+    # generated material with an estimated n,k table).
+    if isinstance(layer.material, str):
+        index = _registry_index()
+        if layer.material not in index:
+            raise KeyError(f"unknown material {layer.material!r} (not in registry)")
+        material = index[layer.material]
+    else:
+        material = layer.material
     try:
-        return optical_constants(index[layer.material], wl_um, clip=clip)
+        return optical_constants(material, wl_um, clip=clip)
     except NoOpticalData as exc:
         raise CoverageError(
-            f"{layer.material} has no optical n,k (it's a radar conductor) — "
+            f"{material.name} has no optical n,k (it's a radar conductor) — "
             f"it can't be used as an optical layer"
         ) from exc
+
+
+def _layer_name(layer: Layer) -> str:
+    return layer.material if isinstance(layer.material, str) else layer.material.name
 
 
 def stack_spectrum(
@@ -92,7 +102,7 @@ def stack_spectrum(
         if not clip and np.isnan(N).any():
             bad = wl[np.isnan(N)]
             raise CoverageError(
-                f"{layer.material}: no optical data at {bad.min():.3g}-{bad.max():.3g} um. "
+                f"{_layer_name(layer)}: no optical data at {bad.min():.3g}-{bad.max():.3g} um. "
                 f"Restrict the band or pass clip=True."
             )
 

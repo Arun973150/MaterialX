@@ -25,7 +25,7 @@ LAYER_ROLES = {
     "substrate",
     "ground",
 }
-SOURCES = {"refractiveindex", "literature"}
+SOURCES = {"refractiveindex", "literature", "tabulated"}
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ class Material:
     ri: dict[str, str] | None = None          # {shelf, book, page} for refractiveindex
     state: str | None = None                  # e.g. insulating / metallic for VO2
     literature_nk: dict[str, float] | None = None
+    nk_table: dict | None = None              # {"wl_um":[...], "n":[...], "k":[...]} for tabulated/generated
     properties: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -52,6 +53,8 @@ class Material:
             missing = {"shelf", "book", "page"} - set(self.ri or {})
             if missing:
                 raise ValueError(f"{self.name}: ri missing {missing}")
+        if self.source == "tabulated" and not self.nk_table:
+            raise ValueError(f"{self.name}: source=tabulated requires an 'nk_table'")
 
 
 def load_registry(path: str | Path = DEFAULT_MATERIALS) -> list[Material]:
