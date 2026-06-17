@@ -47,7 +47,7 @@ on the **volume** (survives restarts):
 ```bash
 bash scripts/setup_openems.sh                      # one-time: from-source build -> /workspace/openems-venv
 source /workspace/openems-venv/bin/activate        # activate the openEMS venv
-cd /workspace/MaterialX/phase1
+cd /workspace/MaterialX
 PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare   # openEMS vs ECM on a test design
 ```
 `simulate()` models the absorber as a **normal-incidence TEM unit cell** (PEC x-walls ‖ E,
