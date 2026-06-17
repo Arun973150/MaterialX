@@ -64,6 +64,53 @@ difference, off-resonance agreement is <2.5 dB. openEMS is now the trustworthy r
 confirms the ECM is a sound design surrogate. (Knobs if a future design needs tighter agreement at
 resonance: lateral mesh resolution and the cells-through-spacer count.)
 
+## 6. Full run at scale — all 3 bands, end-to-end → openEMS-confirmed design
+The complete *"generate more + simulate all three attributes + confirm with full-wave"* pass.
+Four envs are involved (all on the volume); each step says which to activate.
+
+### a. Generate at scale (MatterGen env — where `mattergen-generate` works, e.g. `/workspace/.venv-gen`)
+```bash
+cd /workspace/MaterialX
+for role in radar_conductor dielectric_spacer ir_phasechange; do
+  python -m stealth.discovery.generate --role $role --n 256 --out runs/$role --run
+done
+mkdir -p runs/all && cp runs/*/*.cif runs/all/        # one pool spanning all three roles
+```
+256/role ≈ a few hundred novel crystals (raise `--n` / `--batch_size` to use more of the 80 GB).
+
+### b. Real visible/NIR optics for the pool (GNNOpt env, e.g. `/workspace/.venv-opt`)
+```bash
+cd /workspace/MaterialX
+PYTHONPATH=src python scripts/gnnopt_predict_nk.py --cif-dir runs/all --out runs/all/gnnopt_nk.json
+```
+
+### c. Screen → S.U.N. → fused shortlist → 3-band design (base env: where `import stealth, matgl` works)
+```bash
+cd /workspace/MaterialX
+# Rank every generated material, gate on S.U.N., write Top-N spanning all roles.
+# --prescreen hull-checks only the most-stable N (the slow MP step) so a big pool stays fast:
+PYTHONPATH=src python -m stealth.discovery.select_candidates \
+    --cif-dir runs/all --gnnopt-nk runs/all/gnnopt_nk.json --top 8 --prescreen 40
+# Per-candidate IR + visible simulation (closed optical loop):
+PYTHONPATH=src python -m stealth.discovery.pipeline \
+    --cif-dir runs/all --gnnopt-nk runs/all/gnnopt_nk.json
+# Assemble + geometry-optimize the multilayer over radar+IR+visible using discovered materials:
+PYTHONPATH=src python -m stealth.discovery.design_stack \
+    --candidates data/final_candidates.parquet --gnnopt-nk runs/all/gnnopt_nk.json
+```
+Outputs: `reports/final_candidates.md` (ranked novel materials, all roles), `reports/designed_coating.md`
+(the chosen multilayer with simulated radar+IR+visible), and `data/designed_coating.json` (the chosen
+radar layer for openEMS).
+
+### d. Full-wave sign-off on the chosen design (openEMS venv)
+```bash
+source /workspace/openems-venv/bin/activate
+cd /workspace/MaterialX
+PYTHONPATH=src python -m stealth.physics.radar_fullwave --design data/designed_coating.json --compare
+```
+openEMS re-checks the **exact** radar layer the optimizer picked against the ECM — the full-wave
+confirmation of the delivered design (expect the §5-style agreement, full-wave notch a bit deeper).
+
 ## Re-provisioning after a restart
 A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
 ```bash

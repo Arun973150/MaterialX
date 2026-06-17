@@ -16,6 +16,7 @@ range). Generating dielectric/IR candidates lets more layers use discovered mate
 
 from __future__ import annotations
 
+import json
 import warnings
 
 import numpy as np
@@ -26,9 +27,11 @@ from ..physics import optics, radar
 from .optical_bridge import load_gnnopt_nk, material_from_gnnopt
 
 REPORT = REPO_ROOT / "reports" / "designed_coating.md"
+DESIGN_JSON = REPO_ROOT / "data" / "designed_coating.json"   # chosen design -> openEMS re-check
 
 _DENSITY = {"ec": 1000.0, "vo2": 4600.0, "spacer": 2200.0, "ground": 2700.0}
 _GROUND = "Aluminum (ground plane)"
+RADAR_SPACER_EPS_R = 3.9   # dielectric constant of the radar spacer (shared by _phys and the saved design)
 
 BOUNDS = {
     "t_ec_um": (0.05, 0.50),
@@ -55,7 +58,7 @@ def _phys(u, materials, targets):
                                 optics.Layer(diel, v["t_spacer_opt_um"]), ground)
     rstack = radar.RadarStack(period_mm=v["period_mm"], patch_mm=v["period_mm"] * v["patch_frac"],
                               sheet_resistance_ohm_sq=v["rs_ohm_sq"], spacer_thickness_mm=v["spacer_mm"],
-                              spacer_eps_r=3.9, pattern="capacitive_patch")
+                              spacer_eps_r=RADAR_SPACER_EPS_R, pattern="capacitive_patch")
     x = targets["radar"]["bands_ghz"]["X"]
     rl_x = radar.spectrum(rstack, np.linspace(x[0], x[1], 21))["reflection_loss_db"]
     weight = (v["t_ec_um"] * 1e-6 * _DENSITY["ec"] + v["t_ir_um"] * 1e-6 * _DENSITY["vo2"]
@@ -131,6 +134,29 @@ def main(candidates_parquet=None, gnnopt_nk=None):
     print("\n=== DESIGNED COATING (best balanced) ===")
     print(f"  radar X-band worst: {pick['radar_x_db']:.1f} dB   IR emissivity: {pick['ir_emis']:.3f}   "
           f"visible deltaE: {pick['visible_dE']:.1f}   weight: {pick['weight']:.1f} kg/m^2")
+
+    # Persist the chosen design so openEMS can re-check this EXACT radar layer:
+    #   python -m stealth.physics.radar_fullwave --design data/designed_coating.json
+    design = {
+        "radar_stack": {
+            "period_mm": float(pick["period_mm"]),
+            "patch_mm": float(pick["period_mm"] * pick["patch_frac"]),
+            "sheet_resistance_ohm_sq": float(pick["rs_ohm_sq"]),
+            "spacer_thickness_mm": float(pick["spacer_mm"]),
+            "spacer_eps_r": RADAR_SPACER_EPS_R,
+            "pattern": "capacitive_patch",
+        },
+        "metrics": {
+            "radar_x_worst_db": float(pick["radar_x_db"]),
+            "ir_emissivity": float(pick["ir_emis"]),
+            "visible_deltaE": float(pick["visible_dE"]),
+            "weight_kg_m2": float(pick["weight"]),
+        },
+        "materials": used,
+    }
+    DESIGN_JSON.parent.mkdir(parents=True, exist_ok=True)
+    DESIGN_JSON.write_text(json.dumps(design, indent=2), encoding="utf-8")
+    print(f"  chosen design saved -> {DESIGN_JSON}  (openEMS re-check: radar_fullwave --design)")
 
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     lines = [

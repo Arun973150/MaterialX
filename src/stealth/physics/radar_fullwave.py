@@ -152,6 +152,21 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
     }
 
 
+def stack_from_design(path: str) -> RadarStack:
+    """Build the RadarStack from a design JSON saved by discovery.design_stack."""
+    import json
+    from pathlib import Path
+
+    d = json.loads(Path(path).read_text(encoding="utf-8"))["radar_stack"]
+    return RadarStack(
+        period_mm=d["period_mm"], patch_mm=d["patch_mm"],
+        sheet_resistance_ohm_sq=d["sheet_resistance_ohm_sq"],
+        spacer_thickness_mm=d["spacer_thickness_mm"],
+        spacer_eps_r=d.get("spacer_eps_r", 3.9),
+        pattern=d.get("pattern", "capacitive_patch"),
+    )
+
+
 def compare(stack: RadarStack | None = None, f_ghz: np.ndarray | None = None) -> "object":
     """Run openEMS and the ECM on the same design and tabulate the difference."""
     import pandas as pd
@@ -175,9 +190,13 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--compare", action="store_true", help="run openEMS vs ECM on a test design")
+    ap.add_argument("--design", default=None,
+                    help="design JSON from discovery.design_stack; openEMS-checks that exact radar layer")
     args = ap.parse_args()
-    demo = RadarStack(6, 5.4, 120, 2.5, 4.3, "capacitive_patch")
+    stack = stack_from_design(args.design) if args.design else RadarStack(6, 5.4, 120, 2.5, 4.3, "capacitive_patch")
     print("openEMS available:", openems_available())
-    print("geometry spec:", geometry_spec(demo))
-    if args.compare:
-        compare(demo)
+    print("geometry spec:", geometry_spec(stack))
+    if args.design and not args.compare:
+        print(f"(loaded design from {args.design}; add --compare to run openEMS vs ECM)")
+    if args.compare or args.design:
+        compare(stack)

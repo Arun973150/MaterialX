@@ -53,3 +53,23 @@ def test_sweep_generates_valid_dataset():
     assert len(df) == 64
     assert (df["min_rl_db"] <= 0).all()                  # RL is never positive
     assert df["rl_spectrum_db"].iloc[0].__len__() == 59  # full spectrum stored
+
+
+def test_stack_from_design_roundtrip(tmp_path):
+    """The design JSON saved by design_stack rebuilds into the same RadarStack (openEMS --design)."""
+    import json
+
+    from stealth.physics.radar_fullwave import stack_from_design
+
+    design = {"radar_stack": {
+        "period_mm": 5.0, "patch_mm": 4.3, "sheet_resistance_ohm_sq": 286.0,
+        "spacer_thickness_mm": 3.1, "spacer_eps_r": 3.9, "pattern": "capacitive_patch",
+    }}
+    p = tmp_path / "designed_coating.json"
+    p.write_text(json.dumps(design), encoding="utf-8")
+    s = stack_from_design(str(p))
+    assert s.period_mm == 5.0 and s.patch_mm == 4.3
+    assert s.sheet_resistance_ohm_sq == 286.0 and s.spacer_thickness_mm == 3.1
+    assert s.spacer_eps_r == 3.9
+    # and the rebuilt stack is physically valid in the ECM (RL never positive)
+    assert (spectrum(s, np.linspace(8, 12, 9))["reflection_loss_db"] <= 1e-9).all()
