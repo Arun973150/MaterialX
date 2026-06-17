@@ -48,11 +48,21 @@ def _optical_consistency(role: str, k550: float) -> float:
     return 0.5
 
 
-def build(cif_dir=None, gnnopt_nk=None, top_n=5) -> pd.DataFrame:
+def build(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None) -> pd.DataFrame:
     warnings.filterwarnings("ignore")
     structures = load_cifs(cif_dir) if cif_dir else demo_structures()
 
     scr = screen(predict(structures), role="radar_conductor")          # band gap, best_role, fit_score, eform
+
+    # Scale knob: S.U.N. does an MP query + convex-hull build per material (slow). When the
+    # generated pool is large, keep only the most-stable `prescreen` by the cheap GNN formation
+    # energy and run the expensive hull/novelty check on those — same shortlist, hours -> minutes.
+    if prescreen and len(scr) > prescreen:
+        keep = set(scr.sort_values("eform_per_atom").head(prescreen)["id"])
+        structures = [(sid, s) for (sid, s) in structures if sid in keep]
+        scr = scr[scr["id"].isin(keep)].reset_index(drop=True)
+        print(f"prescreen: hull-checking the {len(structures)} most stable of {len(keep)} (by GNN E_form)")
+
     sun = evaluate_sun(structures)                                     # stable/unique/novel/SUN, e_hull
     nk = load_gnnopt_nk(gnnopt_nk) if gnnopt_nk else {}
 
@@ -134,8 +144,8 @@ def write_report(top: pd.DataFrame, full: pd.DataFrame, gate: str, path=OUT_MD):
     return path
 
 
-def main(cif_dir=None, gnnopt_nk=None, top_n=5):
-    top, full = build(cif_dir, gnnopt_nk, top_n)
+def main(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None):
+    top, full = build(cif_dir, gnnopt_nk, top_n, prescreen)
     gate = full.attrs.get("gate", "all")
     pd.set_option("display.width", 200)
     cols = ["id", "formula", "role", "score", "e_hull_ev_atom", "SUN", "synth_score", "k_550nm"]
@@ -155,5 +165,8 @@ if __name__ == "__main__":
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--gnnopt-nk", default=None)
     ap.add_argument("--top", type=int, default=5)
+    ap.add_argument("--prescreen", type=int, default=None,
+                    help="hull-check only the N most stable (by GNN E_form); for large pools")
     args = ap.parse_args()
-    main(cif_dir=None if args.demo else args.cif_dir, gnnopt_nk=args.gnnopt_nk, top_n=args.top)
+    main(cif_dir=None if args.demo else args.cif_dir, gnnopt_nk=args.gnnopt_nk,
+         top_n=args.top, prescreen=args.prescreen)

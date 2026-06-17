@@ -9,6 +9,7 @@ venv/
 # Data + artifacts (large / regenerable)
 data/*.parquet
 data/*.h5
+data/*.json
 data/raw/
 mlruns/
 *.ckpt
