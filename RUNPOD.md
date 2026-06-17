@@ -39,6 +39,25 @@ python -m stealth.validate.report         # buildable candidate report
 pytest -q                                 # full test suite
 ```
 
+## 5. openEMS full-wave radar (the trustworthy-radar anchor)
+Replaces the fast ECM approximation with true 3D FDTD. Installs into the **volume** (survives restarts):
+```bash
+bash scripts/setup_openems.sh                      # one-time: miniforge + conda-forge openems on /workspace
+source /workspace/miniforge/etc/profile.d/conda.sh && conda activate openems
+cd /workspace/MaterialX
+PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare   # openEMS vs ECM on a test design
+```
+Expect to **tune three spots** flagged `[TUNE]` in `radar_fullwave.py` on first run (boundary
+polarization, port mode functions, mesh density) — openEMS unit-cell setups always need a validation
+pass. Once `--compare` agrees with the ECM on a known absorber, swap it in for the candidate re-check.
+
+## Re-provisioning after a restart
+A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
+```bash
+cd /workspace/MaterialX && git pull && bash scripts/setup_pod.sh
+```
+The MatterGen (`.venv-gen`), GNNOpt (`.venv-opt`), and openEMS (`miniforge`) envs live on the volume and persist.
+
 ## Notes / gotchas
 - **VRAM:** MatterGen fits comfortably in 80 GB; default batch 16. Raise `--batch_size` if under-utilized.
 - **First run** downloads model checkpoints — allow a few minutes + disk.
