@@ -81,7 +81,7 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
     fc = max(float(f.max() - f.min()), 5.0) / 2.0 * 1.2 * 1e9
     D, d, p = stack.period_mm, stack.spacer_thickness_mm, stack.patch_mm
     air = 40.0
-    z_port = d + 0.9 * air
+    z0_port = d + 0.45 * air         # port box sits in the air region above the absorber
 
     FDTD = openEMS(EndCriteria=1e-4)
     FDTD.SetGaussExcite(f0, fc)
@@ -93,9 +93,10 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
     mesh = CSX.GetGrid()
     mesh.SetDeltaUnit(1e-3)  # mm
     res = (C0_MMHZ / (f0 + fc)) / 20.0          # ~lambda/20 (mm)  [TUNE]
+    port_len = max(4.0 * res, 2.0)              # non-zero length along z (excitation direction)
     mesh.AddLine("x", [-D / 2, D / 2])
     mesh.AddLine("y", [-D / 2, D / 2])
-    mesh.AddLine("z", [0, d, z_port, d + air])
+    mesh.AddLine("z", [0, d, z0_port, z0_port + port_len, d + air])
     for ax in "xy":
         mesh.SmoothMeshLines(ax, res)
     mesh.SmoothMeshLines("z", min(res, d / 10.0))   # >= ~10 cells through the spacer
@@ -112,7 +113,7 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
 
     # [TUNE] TEM port at the top: E along x, H along -y; kc=0 (TEM), unit amplitude.
     port = FDTD.AddWaveGuidePort(
-        0, [-D / 2, -D / 2, z_port], [D / 2, D / 2, z_port], "z",
+        0, [-D / 2, -D / 2, z0_port], [D / 2, D / 2, z0_port + port_len], "z",
         ["1", "0", "0"], ["0", "-1", "0"], 0, 1.0,
     )
 
