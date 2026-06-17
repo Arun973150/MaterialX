@@ -1,49 +1,48 @@
 #!/usr/bin/env bash
-# Install openEMS (FDTD full-wave solver) on the pod by building it FROM SOURCE.
-# There is no `openems` package on conda-forge, so the verified path is the project's
-# own build script. Everything lands on /workspace (the persistent volume) so it
-# SURVIVES pod restarts. Run once:  bash scripts/setup_openems.sh
+# Install openEMS (FDTD full-wave solver) on the pod by building it FROM SOURCE (GitHub).
+# NO conda. The project's own update_openEMS.sh --python builds the C++ engine and
+# installs the CSXCAD/openEMS Python bindings into an isolated venv it creates. Everything
+# lands on /workspace (the persistent volume) so it SURVIVES pod restarts.
+# Run once:  bash scripts/setup_openems.sh
 set -e
 
-MF=/workspace/miniforge
 SRC=/workspace/openEMS-Project
-PREFIX=/workspace/openems-install      # built libs + python bindings go here (on the volume)
+PREFIX=/workspace/openems-install      # built C++ libs/headers (on the volume)
+VENV=/workspace/openems-venv           # venv that update_openEMS.sh --python creates next to PREFIX
 
-# 1. Miniforge (conda) on the volume ---------------------------------------------------
-if [ ! -d "$MF" ]; then
-  echo ">> Installing Miniforge to $MF (on the volume)..."
-  wget -qO /tmp/miniforge.sh \
-    https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-  bash /tmp/miniforge.sh -b -p "$MF"
-fi
-# shellcheck disable=SC1091
-source "$MF/etc/profile.d/conda.sh"
+# 1. System build dependencies (Ubuntu/Debian pod image). The PyTorch CUDA image already
+#    has most of these; this is here for a fresh image. Safe to re-run.
+echo ">> Ensuring build dependencies are present (apt)..."
+apt-get update -qq || true
+apt-get install -y -qq build-essential cmake git \
+  libhdf5-dev libvtk9-dev libboost-all-dev libcgal-dev libtinyxml-dev \
+  qtbase5-dev libqt5opengl5-dev python3-venv python3-dev || \
+  echo ">> (apt step skipped/partial — fine if the libs are already in the image)"
 
-# 2. Build-dependency env (compiler + libs openEMS needs; NOT openEMS itself) ----------
-if ! conda env list | grep -q "^openems "; then
-  echo ">> Creating 'openems' env with the C++/Python build toolchain..."
-  conda create -y -n openems -c conda-forge python=3.11 \
-    cmake make gxx_linux-64 gcc_linux-64 \
-    cython numpy h5py scipy matplotlib \
-    boost-cpp tinyxml hdf5 cgal vtk
-fi
-conda activate openems
-
-# 3. Build openEMS from source into $PREFIX (the proven install path) ------------------
+# 2. Clone openEMS-Project recursively (pulls CSXCAD, fparser, AppCSXCAD, etc.)
 if [ ! -d "$SRC" ]; then
   echo ">> Cloning openEMS-Project (recursive)..."
   git clone --recursive https://github.com/thliebig/openEMS-Project.git "$SRC"
 fi
+
+# 3. Build the engine and install the Python bindings into an isolated venv.
+#    --python => CSXCAD + openEMS are pip-installed into $VENV (no conda involved).
 cd "$SRC"
-echo ">> Building openEMS + CSXCAD + python bindings into $PREFIX (this takes a while)..."
+echo ">> Building openEMS + installing python bindings into a venv (this takes a while)..."
 ./update_openEMS.sh "$PREFIX" --python
 
-# 4. Verify ----------------------------------------------------------------------------
+# 4. Add the small extras the compare harness needs (numpy is already in the venv).
+echo ">> Adding numpy/scipy/pandas to the openEMS venv for radar_fullwave --compare..."
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
+pip install -q numpy scipy pandas
+
+# 5. Verify
 echo ">> Verifying openEMS import..."
 python -c "from openEMS import openEMS; from CSXCAD import ContinuousStructure; print('openEMS + CSXCAD OK')"
 
 echo
 echo ">> Done. To use it in a fresh shell:"
-echo "     source $MF/etc/profile.d/conda.sh && conda activate openems"
+echo "     source $VENV/bin/activate"
 echo "     cd /workspace/MaterialX/phase1 && PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare"
-echo ">> (Both the conda env and $PREFIX live on the volume, so they persist across restarts.)"
+echo ">> (Source tree, install prefix, and venv all live on /workspace, so they persist across restarts.)"

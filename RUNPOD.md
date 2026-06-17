@@ -40,11 +40,13 @@ pytest -q                                 # full test suite
 ```
 
 ## 5. openEMS full-wave radar (the trustworthy-radar anchor)
-Replaces the fast ECM approximation with true 3D FDTD. openEMS has **no conda-forge package**, so
-the script builds it **from source** into the **volume** (survives restarts):
+Replaces the fast ECM approximation with true 3D FDTD. openEMS has **no pip/conda package**, so
+the script builds it **from source** (GitHub) via `update_openEMS.sh --python`, which installs the
+Python bindings into an isolated **venv** at `/workspace/openems-venv` (no conda). Everything lives
+on the **volume** (survives restarts):
 ```bash
-bash scripts/setup_openems.sh                      # one-time: miniforge + from-source openEMS on /workspace
-source /workspace/miniforge/etc/profile.d/conda.sh && conda activate openems
+bash scripts/setup_openems.sh                      # one-time: from-source build -> /workspace/openems-venv
+source /workspace/openems-venv/bin/activate        # activate the openEMS venv
 cd /workspace/MaterialX/phase1
 PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare   # openEMS vs ECM on a test design
 ```
@@ -62,7 +64,7 @@ A pod restart wipes the container but keeps `/workspace`. To rebuild the base en
 ```bash
 cd /workspace/MaterialX && git pull && bash scripts/setup_pod.sh
 ```
-The MatterGen (`.venv-gen`), GNNOpt (`.venv-opt`), and openEMS (`miniforge`) envs live on the volume and persist.
+The MatterGen (`.venv-gen`), GNNOpt (`.venv-opt`), and openEMS (`/workspace/openems-venv`, plus its source tree and install prefix) envs live on the volume and persist.
 
 ## Notes / gotchas
 - **VRAM:** MatterGen fits comfortably in 80 GB; default batch 16. Raise `--batch_size` if under-utilized.
