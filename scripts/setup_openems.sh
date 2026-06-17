@@ -44,5 +44,5 @@ python -c "from openEMS import openEMS; from CSXCAD import ContinuousStructure; 
 echo
 echo ">> Done. To use it in a fresh shell:"
 echo "     source $VENV/bin/activate"
-echo "     cd /workspace/MaterialX/phase1 && PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare"
+echo "     cd /workspace/MaterialX && PYTHONPATH=src python -m stealth.physics.radar_fullwave --compare"
 echo ">> (Source tree, install prefix, and venv all live on /workspace, so they persist across restarts.)"
