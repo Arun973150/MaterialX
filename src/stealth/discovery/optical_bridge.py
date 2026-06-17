@@ -52,6 +52,37 @@ def estimate_nk(band_gap_ev: float, wl_um: np.ndarray) -> np.ndarray:
     return n + 1j * k
 
 
+def load_gnnopt_nk(path: str) -> dict:
+    """Load a GNNOpt n,k JSON ({id: {energy_ev, n, k}}) produced on the GPU pod."""
+    import json
+
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def material_from_gnnopt(cid: str, record: dict, layer_role: str = "dielectric_spacer") -> Material:
+    """Physics-ready Material from a GNNOpt n,k record (energy eV -> wavelength um).
+
+    GNNOpt's 0-50 eV electronic spectrum is trustworthy in the visible/NIR; it has no
+    far-IR resolution, so the table spans ~0.025-6.2 um and interpolation clamps beyond
+    that (LWIR stays approximate — use the band-gap estimate there).
+    """
+    e = np.asarray(record["energy_ev"], dtype=float)
+    n = np.asarray(record["n"], dtype=float)
+    k = np.asarray(record["k"], dtype=float)
+    mask = e > 1e-6
+    wl = _HC_EV_UM / e[mask]
+    order = np.argsort(wl)
+    role = layer_role if layer_role in {"ir_thermochromic", "dielectric_spacer"} else "dielectric_spacer"
+    return Material(
+        name=cid,
+        layer_role=role,
+        source="tabulated",
+        provenance="GNNOpt-predicted electronic n,k (0-50 eV); trustworthy visible/NIR",
+        nk_table={"wl_um": wl[order].tolist(), "n": n[mask][order].tolist(), "k": k[mask][order].tolist()},
+    )
+
+
 def candidate_material(
     name: str,
     band_gap_ev: float,
