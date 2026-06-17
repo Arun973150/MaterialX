@@ -10,11 +10,13 @@ cluster. It builds the geometry from a `RadarStack` and runs FDTD, raising a cle
 message if openEMS isn't available so nothing silently fakes a result.
 
 FDTD setup (documented so the cluster run is reproducible):
-  * Unit cell = one period; periodic boundary conditions on the 4 lateral faces.
-  * PEC ground on the bottom; absorbing (MUR/PML) boundary on top.
-  * Capacitive patch = PEC/resistive sheet of size patch_mm centered in the cell.
-  * Resistive sheet modeled via a lumped sheet resistance (ohm/sq).
-  * Plane-wave excitation (nf2ff or a waveguide port), sweep 1-30 GHz.
+  * Unit cell = one period; normal-incidence TEM walls (PEC on the x-walls ‖ E,
+    PMC on the y-walls ‖ H) make one period behave like an infinite periodic array.
+  * PEC ground = the zmax boundary behind the spacer; MUR absorbing boundary at zmin.
+  * Capacitive patch = resistive sheet of size patch_mm centered in the cell.
+  * Resistive sheet modeled via a conducting sheet whose conductivity gives the target
+    sheet resistance (ohm/sq).
+  * TEM waveguide port fires +z toward the absorber and reads S11 (sweep 1-30 GHz).
   * Reflection loss = 20 log10 |S11|.
 """
 
@@ -42,9 +44,9 @@ def geometry_spec(stack: RadarStack) -> dict:
         "sheet_resistance_ohm_sq": stack.sheet_resistance_ohm_sq,
         "spacer_thickness_mm": stack.spacer_thickness_mm,
         "spacer_eps_r": stack.spacer_eps_r,
-        "ground": "PEC",
-        "lateral_bc": "periodic (Floquet)",
-        "top_bc": "PML/MUR absorbing",
+        "ground": "PEC (zmax boundary, behind the spacer)",
+        "lateral_bc": "PEC x-walls / PMC y-walls (normal-incidence TEM unit cell)",
+        "open_bc": "MUR absorbing (zmin, below the +z TEM port)",
         "freq_ghz": (float(FREQ_GHZ[0]), float(FREQ_GHZ[-1])),
     }
 
@@ -61,12 +63,27 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
     """Full-wave FDTD reflection spectrum of the absorber unit cell (pod/cluster only).
 
     Method: normal-incidence reflection off the periodic grounded absorber, modeled as a
-    parallel-plate TEM unit cell — E along x with PEC walls (x), PMC walls (y), PEC ground
-    (z-) and an absorbing top (z+). A TEM waveguide port at the top excites the plane wave
-    and reads S11. Returns the same dict shape as `radar.spectrum`.
+    parallel-plate **TEM** unit cell. For a linearly-polarized normal-incidence plane wave
+    with E along x and H along y propagating +z, image theory makes the cell walls:
+      * x-walls (normal ‖ E)  -> PEC   (n×E = 0, n·H = 0 both satisfied)
+      * y-walls (normal ‖ H)  -> PMC
+    so the unit cell is a square parallel-plate TEM waveguide. Layout along +z (matching the
+    proven openEMS Rect_Waveguide port convention — excite at low z, propagate +z toward the
+    structure):
 
-    Untested on Windows (no openEMS) — three spots to validate/tune on the pod are flagged
-    [TUNE]: the boundary polarization, the port mode functions, and the mesh density.
+        z = 0           MUR open boundary (absorbs the reflected wave below the port)
+        z = port (slab) TEM waveguide port, fires +z, reads S11
+        ...air gap...
+        z = z_patch     resistive capacitive patch (conducting sheet)
+        z = z_patch+d   dielectric spacer up to here
+        z = z_top       PEC ground  ==  the zmax boundary (no separate metal box needed)
+
+    For a square D×D cell the port's measured V/I equals the analytic TEM impedance
+    ZL = Z0, so S11 = uf_ref/uf_inc is the true reflection coefficient with no manual
+    reference impedance. Returns the same dict shape as `radar.spectrum`.
+
+    Validated against the ECM (`radar.spectrum`) via `compare()`; if they disagree, the
+    knobs are the lateral mesh resolution and the cells-through-spacer count below.
     """
     if not openems_available():
         raise RuntimeError(_NOT_AVAIL)
@@ -80,48 +97,52 @@ def simulate(stack: RadarStack, f_ghz: np.ndarray = FREQ_GHZ) -> dict:
     f0 = float(f.mean()) * 1e9
     fc = max(float(f.max() - f.min()), 5.0) / 2.0 * 1.2 * 1e9
     D, d, p = stack.period_mm, stack.spacer_thickness_mm, stack.patch_mm
-    air = 40.0
-    z0_port = d + 0.45 * air         # port box sits in the air region above the absorber
+
+    res = (C0_MMHZ / (f0 + fc)) / 20.0          # ~lambda/20 (mm) at the highest excited freq
+    res_z = min(res, d / 12.0)                  # >= ~12 cells through the spacer
+    air = max(30.0, 8.0 * res)                  # air column between the open boundary and patch
+    z_patch = air                               # patch sits at the top of the air column
+    z_top = air + d                             # spacer top == PEC ground (zmax boundary)
+    port_z0 = 0.35 * air                        # TEM port slab, well inside the air region
+    port_z1 = port_z0 + max(5.0 * res_z, 1.0)
 
     FDTD = openEMS(EndCriteria=1e-4)
     FDTD.SetGaussExcite(f0, fc)
-    # [TUNE] E-field along x -> PEC on x-walls, PMC on y-walls; PEC ground (z-), MUR top (z+).
-    FDTD.SetBoundaryCond(["PEC", "PEC", "PMC", "PMC", "PEC", "MUR"])
+    # E ‖ x  ->  PEC x-walls, PMC y-walls; MUR open below the port, PEC ground at the top.
+    FDTD.SetBoundaryCond(["PEC", "PEC", "PMC", "PMC", "MUR", "PEC"])
 
     CSX = ContinuousStructure()
     FDTD.SetCSX(CSX)
     mesh = CSX.GetGrid()
     mesh.SetDeltaUnit(1e-3)  # mm
-    res = (C0_MMHZ / (f0 + fc)) / 20.0          # ~lambda/20 (mm)  [TUNE]
-    port_len = max(4.0 * res, 2.0)              # non-zero length along z (excitation direction)
-    mesh.AddLine("x", [-D / 2, D / 2])
-    mesh.AddLine("y", [-D / 2, D / 2])
-    mesh.AddLine("z", [0, d, z0_port, z0_port + port_len, d + air])
-    for ax in "xy":
-        mesh.SmoothMeshLines(ax, res)
-    mesh.SmoothMeshLines("z", min(res, d / 10.0))   # >= ~10 cells through the spacer
+    # Fixed lines at the patch edges (±p/2) so the conducting sheet is actually meshed
+    # (otherwise openEMS reports "Unused primitive ... patch!" and drops the absorber).
+    mesh.AddLine("x", [-D / 2, -p / 2, p / 2, D / 2])
+    mesh.AddLine("y", [-D / 2, -p / 2, p / 2, D / 2])
+    mesh.AddLine("z", [0, port_z0, port_z1, z_patch, z_top])
+    mesh.SmoothMeshLines("x", res)
+    mesh.SmoothMeshLines("y", res)
+    mesh.SmoothMeshLines("z", res_z)
 
-    # grounded dielectric spacer
+    # grounded dielectric spacer (ground = the PEC zmax boundary at z_top)
     sp = CSX.AddMaterial("spacer", epsilon=stack.spacer_eps_r)
-    sp.AddBox([-D / 2, -D / 2, 0], [D / 2, D / 2, d])
-    # resistive patch as a conducting sheet (sigma from target sheet resistance)
+    sp.AddBox([-D / 2, -D / 2, z_patch], [D / 2, D / 2, z_top], priority=1)
+    # resistive capacitive patch as a conducting sheet (sigma from target sheet resistance)
     sigma = 1.0 / (stack.sheet_resistance_ohm_sq * _SHEET_T_MM * 1e-3)
     patch = CSX.AddConductingSheet("patch", conductivity=sigma, thickness=_SHEET_T_MM * 1e-3)
-    patch.AddBox([-p / 2, -p / 2, d], [p / 2, p / 2, d])
-    gnd = CSX.AddMetal("gnd")
-    gnd.AddBox([-D / 2, -D / 2, 0], [D / 2, D / 2, 0])
+    patch.AddBox([-p / 2, -p / 2, z_patch], [p / 2, p / 2, z_patch], priority=10)
 
-    # [TUNE] TEM port at the top: E along x, H along -y; kc=0 (TEM), unit amplitude.
+    # TEM port firing +z toward the absorber: E along +x, H along +y (E×H ‖ +z), kc=0.
     port = FDTD.AddWaveGuidePort(
-        0, [-D / 2, -D / 2, z0_port], [D / 2, D / 2, z0_port + port_len], "z",
-        ["1", "0", "0"], ["0", "-1", "0"], 0, 1.0,
+        0, [-D / 2, -D / 2, port_z0], [D / 2, D / 2, port_z1], "z",
+        ["1", "0", "0"], ["0", "1", "0"], 0, 1.0,
     )
 
     sim_path = tempfile.mkdtemp(prefix="oems_")
     FDTD.Run(sim_path, cleanup=True)
 
     fr = f * 1e9
-    port.CalcPort(sim_path, fr)
+    port.CalcPort(sim_path, fr)             # kc=0 -> analytic ZL = Z0 used for the inc/ref split
     s11 = np.asarray(port.uf_ref) / np.asarray(port.uf_inc)
     mag = np.clip(np.abs(s11), 1e-6, None)
     return {
