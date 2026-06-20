@@ -34,3 +34,20 @@ def test_class_mu_prior_only_magnetic_elements_get_mu():
 def test_reference_absorber_for_validation_anchor():
     r = em_literature.reference_absorber()
     assert r.mat_class == "magnetic" and r.mu_imag > 0 and r.eps_real > 0
+
+
+def test_finetune_dataset_filters_to_role_chemistry():
+    import pandas as pd
+
+    from stealth.discovery.finetune_dataset import select_for_role
+
+    df = pd.DataFrame([
+        {"jid": "j1", "formula": "CoFe2O4", "magmom": 3.0, "bandgap_optb88": 0.5, "atoms": "{}"},
+        {"jid": "j2", "formula": "Fe3O4", "magmom": 4.0, "bandgap_optb88": 0.0, "atoms": "{}"},
+        {"jid": "j3", "formula": "SiO2", "magmom": None, "bandgap_optb88": 8.0, "atoms": "{}"},
+        {"jid": "j4", "formula": "Ce3Si5Rh", "magmom": 1.0, "bandgap_optb88": 0.2, "atoms": "{}"},
+    ])
+    mag = set(select_for_role(df, "radar_magnetic")["formula"])
+    assert mag == {"CoFe2O4", "Fe3O4"}                 # magnetic family + has magmom label
+    diel = set(select_for_role(df, "dielectric_spacer")["formula"])
+    assert diel == {"SiO2"}                              # Si-Al-Mg-O family, off-family rejected

@@ -147,9 +147,21 @@ What each piece is:
 - **#6** `manufacturability.py` — abundance/cost/toxicity/density gate + RAM chemistry families
   (already wired into `select_candidates`).
 
-**Integration note:** once `predictors` are trained, wiring `select_candidates`/`design_stack` to
-rank by the #4 reward and to use predicted σ→Rs and μ (for magnetic candidates) is the final
-step that puts the discovered radar/IR materials *into the design*, not just the shortlist.
+**Integration (already wired, fallback-safe):** once `predictors` are trained, `select_candidates`
+automatically ranks by the #4 reward (radar reflection + IR emission) and `design_stack` places the
+top discovered radar material as a single-layer absorber — no flags needed; it silently uses the
+proxy ranking until the predictors exist.
+
+```bash
+# #2 generator specialization — build the RAM-family fine-tuning set, then fine-tune the adapter:
+PYTHONPATH=src python -m stealth.discovery.finetune_dataset --em data/em_dataset.parquet \
+    --role radar_magnetic --out data/finetune/radar_magnetic
+#   -> CIFs + labels.csv ; fine-tune MatterGen's adapter on it (RAFT), then generate with that ckpt
+
+# Validation + the one-page deliverable (anchor #10 + angular stress test #8 run live):
+PYTHONPATH=src python -m stealth.discovery.anchor          # measured-data anchor
+PYTHONPATH=src python -m stealth.discovery.deliverable     # -> reports/DELIVERABLE.md
+```
 
 ## Re-provisioning after a restart
 A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
