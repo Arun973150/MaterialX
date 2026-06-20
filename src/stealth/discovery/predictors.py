@@ -34,13 +34,17 @@ from .em_literature import class_mu_prior
 MODEL_DIR = REPO_ROOT / "models" / "predictors"
 METRICS = REPO_ROOT / "reports" / "predictor_metrics.json"
 
-# property -> JARVIS get_ml_data key + task. Trained independently; each saved to MODEL_DIR.
+# property -> JARVIS get_ml_data key(s). Trained independently; each saved to MODEL_DIR.
+# `key` may be a list of fallbacks (JARVIS key names vary across releases / property availability).
 PROPS = {
-    "bandgap": {"key": "optb88vdw_bandgap", "task": "reg"},
-    "eps": {"key": "epsx", "task": "reg"},                 # static dielectric (n = sqrt(eps))
-    "bulk_modulus": {"key": "bulk_modulus_kv", "task": "reg"},
-    "shear_modulus": {"key": "shear_modulus_gv", "task": "reg"},
-    "magmom": {"key": "magmom_outcar", "task": "reg"},     # |magmom| gates magnetic class
+    "bandgap": {"key": "optb88vdw_bandgap"},
+    "eps": {"key": "epsx"},                                          # static dielectric (n = sqrt(eps))
+    "bulk_modulus": {"key": "bulk_modulus_kv"},
+    "shear_modulus": {"key": "shear_modulus_gv"},
+    # magmom is OPTIONAL: JARVIS-ML treats magnetism as a classification, not a regression target,
+    # so get_ml_data often has no magmom key. The magnetic GATE is composition-based (Fe/Co/Ni/Mn)
+    # in predict_properties regardless; if a key works this just adds a refining estimate.
+    "magmom": {"key": ["magmom_outcar", "magmom_oszicar"], "optional": True},
 }
 
 
@@ -85,23 +89,38 @@ def train(props=tuple(PROPS), test_size: float = 0.1, seed: int = 1) -> dict:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     metrics = {}
     for name in props:
-        key = PROPS[name]["key"]
-        print(f"[{name}] loading JARVIS CFID data for '{key}'...")
-        X, y, jid = get_ml_data(ml_property=key, dataset="cfid_3d")
-        X, y = np.asarray(X, dtype=float), np.asarray(y, dtype=float)
-        ok = np.isfinite(y)                          # drop entries without this label
+        spec = PROPS[name]
+        keys = spec["key"] if isinstance(spec["key"], list) else [spec["key"]]
+        data = err = None
+        for k in keys:                                # try fallback keys in order
+            try:
+                print(f"[{name}] loading JARVIS CFID data for '{k}'...")
+                X, y, _ = get_ml_data(ml_property=k, dataset="cfid_3d")
+                data, used_key = (np.asarray(X, dtype=float), np.asarray(y, dtype=float)), k
+                break
+            except Exception as exc:  # noqa: BLE001
+                err = exc
+        if data is None:
+            msg = f"  [skip] {name}: no usable JARVIS key in {keys} ({err})"
+            if spec.get("optional"):
+                print(msg + "  -- optional, continuing")
+                continue
+            raise
+        X, y = data
+        ok = np.isfinite(y)                           # drop entries without this label
         X, y = X[ok], y[ok]
         Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=seed)
         model = _regressor()
         model.fit(Xtr, ytr)
         mae = float(regr_scores(yte, model.predict(Xte))["mae"])
         joblib.dump(model, MODEL_DIR / f"{name}.joblib")
-        metrics[name] = {"key": key, "n_train": int(len(ytr)), "n_test": int(len(yte)), "mae": round(mae, 4)}
+        metrics[name] = {"key": used_key, "n_train": int(len(ytr)), "n_test": int(len(yte)),
+                         "mae": round(mae, 4)}
         print(f"  {name}: n={len(y)}  held-out MAE={mae:.3f}  -> {name}.joblib")
 
     METRICS.parent.mkdir(parents=True, exist_ok=True)
     METRICS.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    print(f"\nmetrics -> {METRICS}")
+    print(f"\nmetrics -> {METRICS}  ({len(metrics)} models)")
     return metrics
 
 
@@ -133,11 +152,21 @@ def predict_properties(structure) -> dict:
     bandgap = max(0.0, float(_load("bandgap").predict(x)[0]))
     kv = float(_load("bulk_modulus").predict(x)[0])
     gv = float(_load("shear_modulus").predict(x)[0])
-    magmom = abs(float(_load("magmom").predict(x)[0]))
 
     els = {str(s.specie.symbol) for s in structure}
-    is_magnetic = magmom > 0.5
-    mu = class_mu_prior(els) if is_magnetic else complex(1.0, 0.0)
+    # magnetic gate is composition-based (ferrite/magnetic-absorber chemistry); the literature
+    # mu prior returns mu>1 only for Fe/Co/Ni/Mn-bearing compositions. Refine with the optional
+    # magmom model if it was trained.
+    mu = class_mu_prior(els)
+    is_magnetic = mu.imag > 0
+    magmom = None
+    try:
+        magmom = abs(float(_load("magmom").predict(x)[0]))
+        is_magnetic = is_magnetic or magmom > 0.5
+    except FileNotFoundError:
+        pass
+    if not is_magnetic:
+        mu = complex(1.0, 0.0)
     # conductivity class from the DFT-grade band gap (metallic/small-gap -> conductive loss)
     sigma_class = "conductive" if bandgap < 0.1 else ("semiconducting" if bandgap < 1.0 else "insulating")
     durability = float(np.clip((kv - 50.0) / 250.0, 0.0, 1.0))  # ~50->0, ~300 GPa->1
@@ -148,6 +177,7 @@ def predict_properties(structure) -> dict:
         "band_gap_ev": round(bandgap, 3),
         "sigma_class": sigma_class,
         "magnetic": is_magnetic,
+        "magmom": round(magmom, 3) if magmom is not None else None,
         "mu_real": round(mu.real, 3),
         "mu_imag": round(mu.imag, 3),
         "bulk_modulus_gpa": round(kv, 1),
