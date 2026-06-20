@@ -82,29 +82,76 @@ def sheet_impedance(stack: RadarStack, f_hz: np.ndarray) -> np.ndarray:
     return Rs + 1j * w * L
 
 
-def input_impedance(stack: RadarStack, f_hz: np.ndarray) -> np.ndarray:
-    """Input impedance of FSS sheet in parallel with the shorted dielectric stub."""
-    beta = (2 * np.pi * f_hz / C0) * np.sqrt(stack.spacer_eps_r)
-    Zd = Z0 / np.sqrt(stack.spacer_eps_r)
-    Z_stub = 1j * Zd * np.tan(beta * stack.spacer_thickness_mm * 1e-3)
+def _angle_factors(eps_r: float, theta_deg: float, pol: str):
+    """Oblique-incidence wave impedances + dielectric refraction factor (TE/TM).
+
+    Returns (Z_free, Z_dielectric, cos_theta_t): the polarization-dependent free-space and
+    in-dielectric wave impedances and the refracted-angle cosine (Snell). theta=0 reduces to
+    normal incidence (Z_free=Z0, Z_d=Z0/sqrt(eps_r), cos_t=1).
+    """
+    theta = np.radians(theta_deg)
+    cos_i = np.cos(theta)
+    sin_t = np.sin(theta) / np.sqrt(eps_r)            # Snell into the spacer
+    cos_t = np.sqrt(max(0.0, 1.0 - float(sin_t) ** 2))
+    if pol.upper() == "TM":
+        return Z0 * cos_i, (Z0 / np.sqrt(eps_r)) * cos_t, cos_t
+    return Z0 / cos_i, (Z0 / np.sqrt(eps_r)) / cos_t, cos_t   # TE (default)
+
+
+def input_impedance(stack: RadarStack, f_hz: np.ndarray, theta_deg: float = 0.0,
+                    pol: str = "TE") -> np.ndarray:
+    """Input impedance of FSS sheet in parallel with the shorted dielectric stub.
+
+    At oblique incidence the stub uses the z-directed propagation constant and the
+    polarization-dependent dielectric wave impedance.
+    """
+    _, Zd, cos_t = _angle_factors(stack.spacer_eps_r, theta_deg, pol)
+    beta_z = (2 * np.pi * f_hz / C0) * np.sqrt(stack.spacer_eps_r) * cos_t
+    Z_stub = 1j * Zd * np.tan(beta_z * stack.spacer_thickness_mm * 1e-3)
     Zs = sheet_impedance(stack, f_hz)
     return Zs * Z_stub / (Zs + Z_stub)
 
 
-def reflection_coefficient(stack: RadarStack, f_hz: np.ndarray) -> np.ndarray:
-    Zin = input_impedance(stack, f_hz)
-    return (Zin - Z0) / (Zin + Z0)
+def reflection_coefficient(stack: RadarStack, f_hz: np.ndarray, theta_deg: float = 0.0,
+                           pol: str = "TE") -> np.ndarray:
+    Z_free, _, _ = _angle_factors(stack.spacer_eps_r, theta_deg, pol)
+    Zin = input_impedance(stack, f_hz, theta_deg, pol)
+    return (Zin - Z_free) / (Zin + Z_free)
 
 
-def spectrum(stack: RadarStack, f_ghz: np.ndarray) -> dict:
-    """Reflection loss (dB) and absorption over a frequency grid (GHz)."""
+def spectrum(stack: RadarStack, f_ghz: np.ndarray, theta_deg: float = 0.0,
+             pol: str = "TE") -> dict:
+    """Reflection loss (dB) and absorption over a frequency grid (GHz), at incidence angle/pol."""
     f_hz = np.atleast_1d(np.asarray(f_ghz, dtype=float)) * 1e9
-    gamma = reflection_coefficient(stack, f_hz)
+    gamma = reflection_coefficient(stack, f_hz, theta_deg, pol)
     mag = np.clip(np.abs(gamma), 1e-6, None)        # floor avoids log10(0)
     return {
         "f_ghz": f_hz / 1e9,
         "reflection_loss_db": 20 * np.log10(mag),
         "absorption": 1.0 - np.abs(gamma) ** 2,
+    }
+
+
+def angular_stress_test(stack: RadarStack, f_ghz: np.ndarray,
+                        angles=(0, 15, 30, 45, 60), pols=("TE", "TM"),
+                        threshold_db: float = -10.0) -> dict:
+    """Worst-case reflection across incidence angles + polarizations — the radar stress test.
+
+    Real detection is not at normal incidence; a deployable absorber must hold up over a range
+    of angles and both polarizations. Returns the per-(angle,pol) min RL + band coverage, plus
+    the worst case (least absorption, least coverage) across all of them.
+    """
+    rows = []
+    for th in angles:
+        for pol in pols:
+            rl = spectrum(stack, f_ghz, th, pol)["reflection_loss_db"]
+            rows.append({"angle_deg": th, "pol": pol, "min_rl_db": float(rl.min()),
+                         "frac_band_below_thresh": float(np.mean(rl <= threshold_db))})
+    return {
+        "per_angle": rows,
+        "worst_min_rl_db": max(r["min_rl_db"] for r in rows),       # least absorption
+        "worst_coverage": min(r["frac_band_below_thresh"] for r in rows),
+        "normal_min_rl_db": next(r["min_rl_db"] for r in rows if r["angle_deg"] == 0 and r["pol"] == "TE"),
     }
 
 

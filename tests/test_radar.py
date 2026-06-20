@@ -55,6 +55,26 @@ def test_sweep_generates_valid_dataset():
     assert df["rl_spectrum_db"].iloc[0].__len__() == 59  # full spectrum stored
 
 
+def test_oblique_normal_incidence_matches_default():
+    """theta=0, TE must reproduce the default normal-incidence spectrum exactly."""
+    s = RadarStack(6, 5.4, 120, 2.5, 4.3, "capacitive_patch")
+    f = np.linspace(8, 12, 41)
+    assert np.allclose(spectrum(s, f)["reflection_loss_db"],
+                       spectrum(s, f, 0.0, "TE")["reflection_loss_db"])
+
+
+def test_angular_stress_test_reports_worst_case():
+    """The stress test's worst-case absorption is no better than normal incidence."""
+    from stealth.physics.radar import angular_stress_test
+
+    s = RadarStack(6, 5.4, 120, 2.5, 4.3, "capacitive_patch")
+    st = angular_stress_test(s, np.linspace(1, 30, 291))
+    # worst-case min RL (least absorption) is >= the normal-incidence value (less negative)
+    assert st["worst_min_rl_db"] >= st["normal_min_rl_db"] - 1e-6
+    assert 0.0 <= st["worst_coverage"] <= 1.0
+    assert len(st["per_angle"]) == 10  # 5 angles x 2 pols
+
+
 def test_stack_from_design_roundtrip(tmp_path):
     """The design JSON saved by design_stack rebuilds into the same RadarStack (openEMS --design)."""
     import json
