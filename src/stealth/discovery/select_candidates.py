@@ -49,7 +49,8 @@ def _optical_consistency(role: str, k550: float) -> float:
     return 0.5
 
 
-def build(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practical=True) -> pd.DataFrame:
+def build(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practical=True,
+          use_signature=True) -> pd.DataFrame:
     warnings.filterwarnings("ignore")
     structures = load_cifs(cif_dir) if cif_dir else demo_structures()
 
@@ -102,6 +103,32 @@ def build(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practic
             }
         )
     out = pd.DataFrame(rows)
+
+    # #4/#5 integration: when the property predictors are trained (pod), also rank by the
+    # predicted multi-band stealth signature (radar reflection + IR emission). Falls back
+    # silently if the predictors / jarvis-tools aren't present (e.g. local dev).
+    out.attrs["signature"] = False
+    if use_signature:
+        struct_by_id = dict(structures)
+        try:
+            from .rl_finetune import reward as _reward
+
+            rl_db, ir_e, rew = [], [], []
+            for _, rr in out.iterrows():
+                s = struct_by_id.get(rr["id"])
+                d = _reward(s, role=rr["role"]) if s is not None else {}
+                rl_db.append(d.get("radar_min_rl_db"))
+                ir_e.append(d.get("ir_emissivity"))
+                rew.append(d.get("reward"))
+            out["radar_min_rl_db"], out["ir_emissivity"], out["signature_reward"] = rl_db, ir_e, rew
+            have = out["signature_reward"].notna()
+            if have.any():  # blend the signature reward (~ -1..1 -> 0..1) into the score
+                sig_norm = ((out.loc[have, "signature_reward"].astype(float) + 1.0) / 2.0).clip(0, 1)
+                out.loc[have, "score"] = (0.75 * out.loc[have, "score"] + 0.25 * sig_norm).round(3)
+                out.attrs["signature"] = True
+                print(f"signature ranking active: scored {int(have.sum())} candidates by predicted reflection/emission")
+        except Exception as exc:  # noqa: BLE001 - predictors optional; keep the proxy ranking
+            out.attrs["signature_error"] = str(exc)
 
     # Manufacturability gate: never shortlist toxic / precious / rare-earth candidates
     # (the "rhodium coating" failure mode). Fall back to all only if none are practical.
@@ -158,8 +185,9 @@ def write_report(top: pd.DataFrame, full: pd.DataFrame, gate: str, path=OUT_MD):
     return path
 
 
-def main(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practical=True):
-    top, full = build(cif_dir, gnnopt_nk, top_n, prescreen, require_practical)
+def main(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practical=True,
+         use_signature=True):
+    top, full = build(cif_dir, gnnopt_nk, top_n, prescreen, require_practical, use_signature)
     gate = full.attrs.get("gate", "all")
     n_practical = int(full["practical"].sum())
     if full.attrs.get("practical_filter"):
@@ -187,6 +215,9 @@ if __name__ == "__main__":
                     help="hull-check only the N most stable (by GNN E_form); for large pools")
     ap.add_argument("--include-impractical", action="store_true",
                     help="do NOT filter out toxic/precious/rare-earth candidates (off by default)")
+    ap.add_argument("--no-signature", action="store_true",
+                    help="skip predicted reflection/emission ranking (use proxy score only)")
     args = ap.parse_args()
     main(cif_dir=None if args.demo else args.cif_dir, gnnopt_nk=args.gnnopt_nk,
-         top_n=args.top, prescreen=args.prescreen, require_practical=not args.include_impractical)
+         top_n=args.top, prescreen=args.prescreen, require_practical=not args.include_impractical,
+         use_signature=not args.no_signature)

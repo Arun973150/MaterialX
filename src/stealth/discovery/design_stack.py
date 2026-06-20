@@ -94,6 +94,55 @@ def optimize(materials, targets, n_gen=30, n_part=12, seed=0):
     return np.atleast_2d(res.X)
 
 
+def _class_eps(mat_class: str) -> complex:
+    """Median complex permittivity of a material class from the measured-literature table."""
+    from .em_literature import LITERATURE
+
+    rows = [r for r in LITERATURE if r.mat_class == mat_class]
+    if not rows:
+        return complex(10.0, 1.0)
+    return complex(float(np.median([r.eps_real for r in rows])),
+                   float(np.median([r.eps_imag for r in rows])))
+
+
+def discovered_radar_layer(candidates_parquet=None):
+    """Put the top discovered radar material INTO the design as a single-layer (Dallenbach) absorber.
+
+    Uses the candidate's class-level measured EM (magnetic ferrite vs conductive/dielectric loss,
+    from em_literature) and finds its impedance-matched thickness + reflection. This is what makes
+    the discovered radar material part of the *design*, not just the shortlist. Per-structure
+    predicted eps/mu (with the trained #3 predictors) refines the class values.
+    """
+    if not candidates_parquet:
+        return None
+    from pymatgen.core import Composition
+
+    from .anchor import optimal_thickness
+    from .em_literature import class_mu_prior
+
+    df = pd.read_parquet(candidates_parquet)
+    radar = df[df["role"].isin(["radar_conductor", "radar_magnetic"])].sort_values("score", ascending=False)
+    if not len(radar):
+        return None
+    top = radar.iloc[0]
+    els = {e.symbol for e in Composition(top["formula"]).elements}
+    mu = class_mu_prior(els)
+    magnetic = mu.imag > 0
+    eps = _class_eps("magnetic" if magnetic else "conductive")
+    best = optimal_thickness(complex(eps.real, -abs(eps.imag)), complex(mu.real, -abs(mu.imag)))
+    return {
+        "formula": top["formula"],
+        "role": top["role"],
+        "loss_mechanism": "magnetic" if magnetic else "dielectric/conductive",
+        "eps_class": [round(eps.real, 1), round(eps.imag, 1)],
+        "mu_class": [round(mu.real, 2), round(mu.imag, 2)],
+        "matched_thickness_mm": round(best["thickness_mm"], 2),
+        "min_rl_db": round(best["min_rl_db"], 1),
+        "f_at_min_ghz": round(best["f_at_min_ghz"], 1),
+        "eps_source": "literature class median (refine with trained #3 predictors + CIF)",
+    }
+
+
 def pick_materials(candidates_parquet=None, gnnopt_nk=None):
     """Choose the discovered material per role (GNNOpt n,k); fall back to known materials."""
     nk = load_gnnopt_nk(gnnopt_nk) if gnnopt_nk else {}
@@ -135,6 +184,13 @@ def main(candidates_parquet=None, gnnopt_nk=None):
     print(f"  radar X-band worst: {pick['radar_x_db']:.1f} dB   IR emissivity: {pick['ir_emis']:.3f}   "
           f"visible deltaE: {pick['visible_dE']:.1f}   weight: {pick['weight']:.1f} kg/m^2")
 
+    # Discovered radar material placed into the design as a bulk single-layer absorber:
+    disc_radar = discovered_radar_layer(candidates_parquet)
+    if disc_radar:
+        print(f"  discovered radar material: {disc_radar['formula']} "
+              f"({disc_radar['loss_mechanism']} loss) -> {disc_radar['min_rl_db']} dB "
+              f"@ {disc_radar['matched_thickness_mm']} mm")
+
     # Persist the chosen design so openEMS can re-check this EXACT radar layer:
     #   python -m stealth.physics.radar_fullwave --design data/designed_coating.json
     design = {
@@ -146,6 +202,7 @@ def main(candidates_parquet=None, gnnopt_nk=None):
             "spacer_eps_r": RADAR_SPACER_EPS_R,
             "pattern": "capacitive_patch",
         },
+        "discovered_radar_material": disc_radar,
         "metrics": {
             "radar_x_worst_db": float(pick["radar_x_db"]),
             "ir_emissivity": float(pick["ir_emis"]),
@@ -180,6 +237,20 @@ def main(candidates_parquet=None, gnnopt_nk=None):
         "",
         f"Feasible designs on the Pareto front: {len(feasible)}/{len(df)}.",
         "",
+    ]
+    if disc_radar:
+        lines += [
+            "## Discovered radar material in the design",
+            "",
+            f"The top discovered radar candidate **{disc_radar['formula']}** "
+            f"({disc_radar['role'].replace('_', ' ')}, {disc_radar['loss_mechanism']} loss) placed as a "
+            f"metal-backed single-layer absorber: **{disc_radar['min_rl_db']} dB** at "
+            f"{disc_radar['matched_thickness_mm']} mm ({disc_radar['f_at_min_ghz']} GHz), using "
+            f"class ε={disc_radar['eps_class']}, μ={disc_radar['mu_class']}. "
+            "_(ε from the measured-literature class median; refines with the trained #3 predictors + the candidate CIF.)_",
+            "",
+        ]
+    lines += [
         "_Discovered materials are used where their GNNOpt n,k is valid (visible/NIR optical layers). "
         "IR stays on VO₂ (real IR data); generating dielectric/IR candidates extends discovery to those "
         "layers. Next: openEMS/DFT validation of the chosen design._",
