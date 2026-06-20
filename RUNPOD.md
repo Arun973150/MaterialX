@@ -111,6 +111,46 @@ PYTHONPATH=src python -m stealth.physics.radar_fullwave --design data/designed_c
 openEMS re-checks the **exact** radar layer the optimizer picked against the ECM — the full-wave
 confirmation of the delivered design (expect the §5-style agreement, full-wave notch a bit deeper).
 
+## 7. Property-driven discovery (the proper build: #1 dataset → #3 predictors → #4/#5 reward)
+This is the research upgrade that makes generation steer on *real predicted stealth properties*
+instead of a band-gap proxy. Runs in the **base/stealth env** (+ the `[train]` extra).
+
+```bash
+cd /workspace/MaterialX && git pull
+pip install -e ".[train]"        # jarvis-tools, lightgbm, scikit-learn, joblib
+
+# #1 (optional unified table) — DFT-grade EM/dielectric/moduli/magmom labels by structure:
+PYTHONPATH=src python -m stealth.discovery.dataset --out data/em_dataset.parquet
+
+# #3 train the property predictors from structure (CFID + GBT, 90:10 split, held-out MAE):
+PYTHONPATH=src python -m stealth.discovery.predictors --train
+#   -> models/predictors/*.joblib + reports/predictor_metrics.json
+#   expect (JARVIS-ML benchmarks): refractive index ~0.5, bulk/shear modulus ~10 GPa
+
+# #4 score any generated pool by its predicted radar+IR signature, and
+# #5 reward-rank it (stealth - weight - cost - (1-durability), manufacturability-gated):
+PYTHONPATH=src python -m stealth.discovery.rl_finetune --role radar_magnetic --score-dir /workspace/run_full/all/cifs
+
+# #5 full reward-guided generation loop (generate -> score -> elite -> re-condition):
+PYTHONPATH=src python -m stealth.discovery.rl_finetune --role radar_magnetic --rounds 3
+```
+
+What each piece is:
+- **#1** `dataset.py` (JARVIS-DFT dft_3d) + `em_literature.py` (measured GHz ε/μ — the only real
+  permeability source).
+- **#3** `predictors.py` — refractive index/dielectric, bulk/shear modulus (durability), magnetic
+  moment (→ permeability via the literature prior), band gap (→ σ class), all from structure.
+- **#4** `objective.py` — metal-backed single-layer (Dallenbach) radar reflection from predicted
+  ε,μ + IR surface emissivity → the signature to minimize.
+- **#5** `rl_finetune.py` — reward-ranked generation; `finetune_on_elite` marks the heavier RAFT
+  adapter-fine-tuning upgrade.
+- **#6** `manufacturability.py` — abundance/cost/toxicity/density gate + RAM chemistry families
+  (already wired into `select_candidates`).
+
+**Integration note:** once `predictors` are trained, wiring `select_candidates`/`design_stack` to
+rank by the #4 reward and to use predicted σ→Rs and μ (for magnetic candidates) is the final
+step that puts the discovered radar/IR materials *into the design*, not just the shortlist.
+
 ## Re-provisioning after a restart
 A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
 ```bash
