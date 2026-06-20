@@ -32,12 +32,24 @@ class LayerTarget:
 TARGETS: dict[str, LayerTarget] = {
     "radar_conductor": LayerTarget(
         role="radar_conductor",
-        description="Metallic / small-gap phase for broadband microwave loss (radar core).",
+        description="Conductive/dielectric-loss phase for microwave loss (carbide/MXene/SiC-like).",
         band_gap_ev=(0.0, 0.5),
         mattergen_property="dft_band_gap",
         mattergen_value=0.0,
-        chemical_system=["Ti", "C", "V", "Nb", "Mo", "In", "Sn", "O"],
+        # abundant, cheap conductive-loss chemistries (carbides, nitrides, doped oxides)
+        chemical_system=["Ti", "V", "Cr", "Fe", "Nb", "Si", "Al", "C", "N"],
         max_eform_per_atom=-0.2,
+        guidance=2.0,
+    ),
+    "radar_magnetic": LayerTarget(
+        role="radar_magnetic",
+        description="Magnetic-loss absorber (spinel/hex ferrite, carbonyl-iron-like) — the "
+                    "dominant low-GHz RAM mechanism via complex permeability.",
+        band_gap_ev=(0.0, 3.0),
+        mattergen_property="dft_mag_density",   # steer toward high magnetization
+        mattergen_value=0.2,
+        chemical_system=["Fe", "Co", "Ni", "Mn", "Zn", "Mg", "Ba", "Sr", "O"],
+        max_eform_per_atom=-1.0,
         guidance=2.0,
     ),
     "ir_phasechange": LayerTarget(
@@ -46,7 +58,7 @@ TARGETS: dict[str, LayerTarget] = {
         band_gap_ev=(0.0, 1.0),
         mattergen_property="dft_band_gap",
         mattergen_value=0.6,
-        chemical_system=["V", "W", "Ti", "O"],
+        chemical_system=["V", "Ti", "Nb", "Mn", "Fe", "O"],
         max_eform_per_atom=-1.0,
         guidance=2.0,
     ),
@@ -56,7 +68,7 @@ TARGETS: dict[str, LayerTarget] = {
         band_gap_ev=(3.0, 12.0),
         mattergen_property="dft_band_gap",
         mattergen_value=5.0,
-        chemical_system=["Si", "Al", "Mg", "O", "N"],
+        chemical_system=["Si", "Al", "Mg", "Ca", "O", "N"],
         max_eform_per_atom=-1.5,
         guidance=2.0,
     ),

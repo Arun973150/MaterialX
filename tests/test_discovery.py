@@ -20,14 +20,20 @@ def test_get_target_rejects_unknown():
 
 
 def test_role_fit_routes_metal_to_conductor():
-    # metal: band gap ~0, stable -> best fit is the radar conductor
-    fits = {r: _role_fit(0.0, -0.5, TARGETS[r]) for r in TARGETS}
+    # conductive-loss chemistry (Ti-C), band gap ~0, stable -> best fit is the radar conductor
+    fits = {r: _role_fit(0.0, -0.5, {"Ti", "C"}, TARGETS[r]) for r in TARGETS}
     assert max(fits, key=fits.get) == "radar_conductor"
 
 
 def test_role_fit_routes_wide_gap_to_dielectric():
-    fits = {r: _role_fit(5.0, -2.0, TARGETS[r]) for r in TARGETS}
+    fits = {r: _role_fit(5.0, -2.0, {"Si", "O"}, TARGETS[r]) for r in TARGETS}
     assert max(fits, key=fits.get) == "dielectric_spacer"
+
+
+def test_role_fit_routes_ferrite_to_magnetic():
+    # Fe-O ferrite chemistry, moderate gap, stable -> magnetic-loss radar role
+    fits = {r: _role_fit(0.5, -1.5, {"Fe", "O"}, TARGETS[r]) for r in TARGETS}
+    assert max(fits, key=fits.get) == "radar_magnetic"
 
 
 def test_demo_structures_build():

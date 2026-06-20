@@ -73,27 +73,40 @@ def predict(structures: list[tuple[str, "object"]]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _role_fit(bg: float, eform: float, t) -> float:
-    """0..1 fitness for a role: band gap inside range + stability margin (higher=better)."""
+def _chem_match(els: set[str], t) -> float:
+    """Fraction of the composition's elements that belong to the role's chemical family."""
+    if not t.chemical_system:
+        return 1.0
+    allowed = set(t.chemical_system)
+    return sum(1 for e in els if e in allowed) / max(1, len(els))
+
+
+def _role_fit(bg: float, eform: float, els: set[str], t) -> float:
+    """0..1 fitness for a role: band gap in range + stability margin + chemistry match."""
     lo, hi = t.band_gap_ev
     in_gap = 1.0 if lo <= bg <= hi else max(0.0, 1.0 - min(abs(bg - lo), abs(bg - hi)))
     stable = 1.0 if eform <= t.max_eform_per_atom else max(0.0, 1.0 + (t.max_eform_per_atom - eform))
-    return float(0.6 * in_gap + 0.4 * stable)
+    chem = _chem_match(els, t)
+    return float(0.45 * in_gap + 0.3 * stable + 0.25 * chem)
 
 
 def screen(df: pd.DataFrame, role: str) -> pd.DataFrame:
     """Filter + rank candidates for one layer role."""
+    from pymatgen.core import Composition
+
     t = get_target(role)
     out = df.copy()
     out["target_role"] = role
-    out["fit_score"] = [_role_fit(bg, ef, t) for bg, ef in zip(out["band_gap_ev"], out["eform_per_atom"])]
+    els = [set(Composition(f).get_el_amt_dict()) for f in out["formula"]]
+    out["fit_score"] = [_role_fit(bg, ef, e, t)
+                        for bg, ef, e in zip(out["band_gap_ev"], out["eform_per_atom"], els)]
     out["gap_ok"] = out["band_gap_ev"].between(*t.band_gap_ev)
     out["stable_ok"] = out["eform_per_atom"] <= t.max_eform_per_atom
     out["passes"] = out["gap_ok"] & out["stable_ok"]
     # best-fitting role across all targets (the classification view)
     out["best_role"] = [
-        max(TARGETS, key=lambda r: _role_fit(bg, ef, TARGETS[r]))
-        for bg, ef in zip(out["band_gap_ev"], out["eform_per_atom"])
+        max(TARGETS, key=lambda r: _role_fit(bg, ef, e, TARGETS[r]))
+        for bg, ef, e in zip(out["band_gap_ev"], out["eform_per_atom"], els)
     ]
     return out.sort_values(["passes", "fit_score"], ascending=[False, False]).reset_index(drop=True)
 
