@@ -23,3 +23,20 @@ def test_phys_returns_sane_metrics():
     assert 0.0 <= m["ir_emissivity"] <= 1.0
     assert m["visible_deltaE"] >= 0.0
     assert m["weight_kg_m2"] > 0.0
+
+
+def test_discovered_radar_layer_places_magnetic_candidate(tmp_path):
+    """The top discovered radar candidate becomes a single-layer absorber in the design."""
+    import pandas as pd
+
+    from stealth.discovery.design_stack import discovered_radar_layer
+
+    p = tmp_path / "fc.parquet"
+    pd.DataFrame([
+        {"id": "g1", "formula": "CoFe2O4", "role": "radar_magnetic", "score": 0.8},
+        {"id": "g2", "formula": "TiC", "role": "radar_conductor", "score": 0.6},
+    ]).to_parquet(p)
+    r = discovered_radar_layer(str(p))
+    assert r["formula"] == "CoFe2O4" and r["loss_mechanism"] == "magnetic"
+    assert r["min_rl_db"] < -10.0 and r["matched_thickness_mm"] > 0
+    assert discovered_radar_layer(None) is None
