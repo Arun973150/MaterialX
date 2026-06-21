@@ -73,8 +73,18 @@ def _candidates_section() -> list[str]:
     sections = [header, ""] + _table(top) + [""]
     # Best practical candidate PER ROLE — the multispectral discovery story (one per layer).
     if "role" in practical.columns:
-        best = (practical.sort_values("score", ascending=False)
-                .drop_duplicates(subset="role"))
+        from pymatgen.core import Composition
+
+        def _radar_ok(row) -> bool:
+            # reject dielectrics mislabeled into a radar role (e.g. SiO2 tagged radar_magnetic)
+            if row["role"] not in ("radar_magnetic", "radar_conductor"):
+                return True
+            els = {e.symbol for e in Composition(row["formula"]).elements}
+            if row["role"] == "radar_magnetic":
+                return bool(els & {"Fe", "Co", "Ni", "Mn"})
+            return float(row.get("band_gap_ev", 9.9)) < 1.0
+        valid = practical[practical.apply(_radar_ok, axis=1)]
+        best = valid.sort_values("score", ascending=False).drop_duplicates(subset="role")
         sections += ["**Best discovered material per stealth-layer role:**", ""] + _table(best) + [""]
     return sections
 
