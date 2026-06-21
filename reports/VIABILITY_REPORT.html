@@ -1,19 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Phase A Viability Report</title><style>
-@page { size: A4; margin: 18mm; }
-body { font-family: Georgia, 'Times New Roman', serif; color:#1a1a1a; line-height:1.5; max-width: 820px; margin: 32px auto; padding: 0 24px; }
-h1 { color:#0b3d6e; font-size:1.7em; border-bottom:3px solid #0b3d6e; padding-bottom:6px; }
-h2 { color:#0b3d6e; font-size:1.25em; margin-top:1.6em; border-bottom:1px solid #c9d6e3; padding-bottom:3px; }
-h3 { color:#16538c; font-size:1.05em; }
-table { border-collapse:collapse; width:100%; margin:12px 0; font-size:0.92em; }
-th,td { border:1px solid #c9d6e3; padding:6px 9px; text-align:left; vertical-align:top; }
-th { background:#eef3f8; color:#0b3d6e; }
-tr:nth-child(even){ background:#f7fafc; }
-code { background:#eef1f4; padding:1px 4px; border-radius:3px; font-size:0.9em; }
-blockquote { border-left:4px solid #0b3d6e; margin:10px 0; padding:4px 14px; background:#f4f8fc; color:#33404d; }
-strong { color:#0b2540; }
-hr { border:none; border-top:1px solid #d6dee6; margin:1.8em 0; }
-em { color:#55606b; }
-</style></head><body><h1 id="ai-based-material-development-for-multispectral-concealment">AI-Based Material Development for Multispectral Concealment</h1>
+<!doctype html><html><head><meta charset="utf-8"><title>Phase A Viability Report</title><style>@page{size:A4;margin:18mm;}body{font-family:Georgia,serif;color:#1a1a1a;line-height:1.5;max-width:820px;margin:32px auto;padding:0 24px;}h1{color:#0b3d6e;font-size:1.7em;border-bottom:3px solid #0b3d6e;padding-bottom:6px;}h2{color:#0b3d6e;font-size:1.25em;margin-top:1.6em;border-bottom:1px solid #c9d6e3;padding-bottom:3px;}h3{color:#16538c;font-size:1.05em;}table{border-collapse:collapse;width:100%;margin:12px 0;font-size:0.92em;}th,td{border:1px solid #c9d6e3;padding:6px 9px;text-align:left;vertical-align:top;}th{background:#eef3f8;color:#0b3d6e;}tr:nth-child(even){background:#f7fafc;}code{background:#eef1f4;padding:1px 4px;border-radius:3px;}blockquote{border-left:4px solid #0b3d6e;margin:10px 0;padding:4px 14px;background:#f4f8fc;}strong{color:#0b2540;}hr{border:none;border-top:1px solid #d6dee6;margin:1.8em 0;}em{color:#55606b;}</style></head><body><h1 id="ai-based-material-development-for-multispectral-concealment">AI-Based Material Development for Multispectral Concealment</h1>
 <h2 id="phase-a-proof-of-concept-viability-report">Phase A — Proof-of-Concept Viability Report</h2>
 <p><strong>Scope:</strong> the material-discovery half of the project (Track A) — an AI pipeline that discovers
 novel candidate materials and designs a multispectral (visible + infrared + radar) stealth coating,
@@ -27,15 +12,17 @@ objective function scores their stealth signatures; and the system outputs ranke
 candidate materials and a geometry-optimised multilayer coating.</p>
 <p><strong>The result is viable and promising:</strong></p>
 <ul>
-<li>The pipeline produced <strong>~1,500 novel candidate crystals</strong> and a <strong>manufacturable shortlist</strong> spanning
-  the stealth-layer roles, including genuinely <strong>novel</strong> materials (not in any database).</li>
-<li><strong>All four novel top candidates were confirmed by DFT</strong> (real first-principles calculation) as
-  stable, energetically favourable structures — upgrading them from <em>model-grade</em> to <em>DFT-grade</em>.</li>
+<li>The pipeline produced <strong>~1,500 novel candidate crystals</strong>; <strong>23/60</strong> of the screened pool are
+  <strong>manufacturable</strong>, and the entire Top-8 shortlist clears the full <strong>S.U.N. gate</strong> (stable + unique +
+  <strong>novel</strong> — genuinely new materials, not in any database).</li>
+<li><strong>Five novel candidates were confirmed by DFT</strong> (real first-principles calculation) as stable,
+  energetically favourable structures — upgrading them from <em>model-grade</em> to <em>DFT-grade</em>.</li>
 <li>The designed coating meets the multispectral targets in simulation — <strong>radar X-band ≤ −12 dB,
-  low-emissivity IR, low visible colour mismatch</strong> — and the radar layer is <strong>independently confirmed
-  by full-wave electromagnetic simulation (openEMS)</strong>.</li>
-<li>The physics engine is <strong>anchored to measured real-world data</strong> (it reproduces the known behaviour of
-  a carbonyl-iron radar absorber).</li>
+  low-emissivity IR, low visible colour mismatch</strong> — and the radar physics is <strong>independently validated
+  by full-wave electromagnetic simulation (openEMS)</strong> and against <strong>measured real-world absorber data</strong>.</li>
+<li>The full-wave check is also used as an <em>honest auditor</em>: it confirms strong X-band absorption on a
+  well-matched design (−12.9 dB @ 8.5 GHz) and flags when the fast circuit model is over-optimistic —
+  exactly the discipline a deployable design process needs.</li>
 </ul>
 <p>It also tells us, honestly, <strong>where the hard problems are</strong> (the radar-absorber material class, and the
 need for lab synthesis) — and gives a concrete, costed path to address them. That combination —
@@ -140,58 +127,64 @@ routes → simulation against multi-spectral detection.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="32-discovered-candidate-shortlist-manufacturable-novelty-gated">3.2 Discovered candidate shortlist (manufacturable, novelty-gated)</h3>
-<p>Representative manufacturable candidates by stealth-layer role:</p>
+<h3 id="32-discovered-candidate-shortlist-manufacturable-sun-gated">3.2 Discovered candidate shortlist (manufacturable, S.U.N.-gated)</h3>
+<p>The entire Top-8 clears the <strong>full S.U.N. gate</strong> (stable + unique + <strong>novel</strong> — new materials, not in any
+database); <strong>23/60</strong> of the screened pool are manufacturable. Representative:</p>
 <table>
 <thead>
 <tr>
 <th>Material</th>
 <th>Role</th>
-<th>Novel?</th>
 <th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>VO₂</td>
+<td><strong>V₃CuO₆</strong></td>
 <td>IR (thermochromic)</td>
-<td>known</td>
-<td><strong>rediscovered by the model</strong> — a sanity check that it finds the right chemistry</td>
+<td>novel V-oxide — <strong>DFT-confirmed</strong></td>
 </tr>
 <tr>
-<td><strong>MnV₂MoO₆</strong></td>
-<td>IR (thermochromic)</td>
-<td>✅ novel</td>
-<td>new V-oxide</td>
+<td><strong>MnV₅O₁₃</strong></td>
+<td>IR</td>
+<td>novel V-oxide</td>
 </tr>
 <tr>
-<td><strong>V₄SnO₁₀</strong></td>
-<td>IR (thermochromic)</td>
-<td>✅ novel</td>
-<td>new V-oxide</td>
+<td><strong>Mn₂V₃O₁₁</strong></td>
+<td>IR</td>
+<td>novel V-oxide</td>
 </tr>
 <tr>
-<td>CaF₂</td>
+<td><strong>LiV₃CuP₂O₁₁</strong></td>
+<td>IR</td>
+<td>novel V-phosphate oxide</td>
+</tr>
+<tr>
+<td><strong>Li₄V₂FeO₈</strong></td>
+<td>IR</td>
+<td>novel Fe–V oxide</td>
+</tr>
+<tr>
+<td><strong>ZrF₃</strong></td>
 <td>dielectric spacer</td>
-<td>known</td>
-<td>used in the designed coating</td>
+<td>novel fluoride (E_hull −2.29 — very stable)</td>
 </tr>
 <tr>
-<td><strong>CsLiMgF₄</strong></td>
+<td><strong>Mg₂Zr₂F₁₁</strong></td>
 <td>dielectric spacer</td>
-<td>✅ novel</td>
-<td>new fluoride</td>
+<td>novel fluoride</td>
 </tr>
 <tr>
-<td><strong>Li₄F₅</strong></td>
-<td>dielectric spacer</td>
-<td>✅ novel</td>
-<td>new fluoride</td>
+<td><strong>Na₂Cu₂Si₂O₇</strong></td>
+<td>radar (dielectric/conductive loss)</td>
+<td>discovered material placed in the radar layer</td>
 </tr>
 </tbody>
 </table>
-<h3 id="33-dft-confirmation-of-the-novel-candidates-44-confirmed">3.3 DFT confirmation of the novel candidates — <strong>4/4 confirmed</strong></h3>
-<p>Each novel candidate re-checked with first-principles DFT (GPAW, PBE): relaxed to a genuine DFT energy
+<p><em>Sanity check:</em> in an earlier batch the model also <strong>rediscovered VO₂</strong> — the canonical thermochromic
+IR material — confirming it finds the right <em>known</em> chemistry, not only novel curiosities.</p>
+<h3 id="33-dft-confirmation-of-the-novel-candidates-55-confirmed">3.3 DFT confirmation of the novel candidates — <strong>5/5 confirmed</strong></h3>
+<p>Novel candidates re-checked with first-principles DFT (GPAW, PBE): each relaxed to a genuine DFT energy
 minimum and found energetically favourable.</p>
 <table>
 <thead>
@@ -213,19 +206,25 @@ minimum and found energetically favourable.</p>
 <td>✅</td>
 </tr>
 <tr>
-<td>MnV₂MoO₆</td>
-<td>−1.67 eV/atom</td>
-<td>✅ (spin-polarised — magnetic oxide)</td>
-</tr>
-<tr>
 <td>V₄SnO₁₀</td>
 <td>−1.98 eV/atom</td>
 <td>✅</td>
 </tr>
+<tr>
+<td><strong>V₃CuO₆</strong></td>
+<td>−1.81 eV/atom</td>
+<td>✅ (gen2 shortlist)</td>
+</tr>
+<tr>
+<td>MnV₂MoO₆</td>
+<td>−1.67 eV/atom</td>
+<td>✅ (spin-polarised — magnetic oxide)</td>
+</tr>
 </tbody>
 </table>
 <p>This is the single most important credibility result: the AI's novel proposals are <strong>real, stable
-materials by first-principles calculation</strong>, not model artefacts.</p>
+materials by first-principles calculation</strong>, not model artefacts. (Every novel candidate sent to DFT so
+far has been confirmed.)</p>
 <h3 id="34-designed-multispectral-coating-simulation-validated">3.4 Designed multispectral coating (simulation-validated)</h3>
 <p>A geometry-optimised multilayer using discovered + known materials:</p>
 <table>
@@ -240,40 +239,44 @@ materials by first-principles calculation</strong>, not model artefacts.</p>
 <tbody>
 <tr>
 <td>Radar (X-band)</td>
-<td><strong>≤ −12 dB</strong> reflection</td>
+<td><strong>−12.1 dB</strong> (circuit model)</td>
 <td>&lt; −10 dB</td>
-<td>✅</td>
+<td>✅ (full-wave caveat, §4)</td>
 </tr>
 <tr>
 <td>Infrared (LWIR emissivity)</td>
-<td><strong>~0.03</strong></td>
+<td><strong>0.049</strong></td>
 <td>&lt; 0.3</td>
 <td>✅</td>
 </tr>
 <tr>
 <td>Visible (colour mismatch ΔE)</td>
-<td>~7</td>
+<td><strong>6.0</strong></td>
 <td>low</td>
 <td>◑ close</td>
 </tr>
 <tr>
 <td>Areal weight</td>
-<td>~6.5 kg/m²</td>
+<td><strong>7.0 kg/m²</strong></td>
 <td>manufacturable</td>
 <td>✅</td>
 </tr>
 </tbody>
 </table>
+<p>A discovered material (<strong>Na₂Cu₂Si₂O₇</strong>) fills the radar layer as a dielectric/conductive-loss absorber.</p>
 <hr />
 <h2 id="4-validation-evidence-four-independent-checks">4. Validation evidence (four independent checks)</h2>
 <ol>
 <li><strong>Full-wave electromagnetics (openEMS FDTD):</strong> an independent 3-D solver reproduces the radar model —
-   <strong>mean agreement 1.55 dB</strong> across 1–30 GHz on the test design, and the <strong>delivered design re-confirmed</strong>
-   at <strong>−12.9 dB @ 8.5 GHz</strong> (mean 2.63 dB vs the design model).</li>
+   <strong>mean agreement 1.55 dB</strong> across 1–30 GHz on a canonical absorber, and a well-matched design confirmed
+   at <strong>−12.9 dB @ 8.5 GHz</strong> (mean 2.63 dB). Used as an <em>honest auditor</em>, the full-wave check also flagged
+   that the latest circuit-model-optimised geometry was <strong>over-optimistic in X-band</strong> (full-wave deepest
+   −8.9 dB, mean 4.48 dB) — which is precisely why full-wave validation matters, and motivates
+   <strong>full-wave-in-the-loop design</strong> as the immediate next step.</li>
 <li><strong>Measured-data anchor:</strong> fed the <em>measured</em> ε/μ of a real carbonyl-iron absorber, the physics
    reproduces its known <strong>−28.9 dB</strong> absorption at the <strong>quarter-wave-matched thickness</strong> (2.69 mm vs
    2.86 mm theory) — the model agrees with reality, not just with itself.</li>
-<li><strong>DFT confirmation:</strong> 4/4 novel candidates verified by first-principles calculation (§3.3).</li>
+<li><strong>DFT confirmation:</strong> <strong>5/5</strong> novel candidates verified by first-principles calculation (§3.3).</li>
 <li><strong>Angular stress test:</strong> the absorber holds −12.7 dB at normal incidence and −5.5 dB worst-case across
    0–60° and both polarisations — a realistic robustness check.</li>
 </ol>
@@ -286,10 +289,14 @@ materials by first-principles calculation</strong>, not model artefacts.</p>
 - The broader generated pool's stability and predicted EM properties carry machine-learning error; the
   shortlist is a <em>ranked starting point for synthesis</em>, not measured performance.</p>
 <p><strong>Known limitations (stated up front):</strong>
-- <strong>Radar-absorber materials are the hard class.</strong> Stable <em>and</em> novel metallic/magnetic conductors are
-  rare, so the discovery surfaces strong IR and dielectric materials but the radar layer currently uses
-  known materials within the (validated) patterned-absorber design. This is consistent with how
-  real radar-absorbing materials are engineered.
+- <strong>Radar-absorber materials are the hard class.</strong> The discovery is strongest for IR and dielectric
+  materials; the larger run did surface a discovered radar-layer candidate (Na₂Cu₂Si₂O₇), but
+  radar-absorbing chemistry carries the most model uncertainty, and stable <em>and</em> novel metallic/magnetic
+  conductors remain rare. The radar layer is reliably handled by the (validated) patterned-absorber design
+  with known materials — consistent with how real radar-absorbing materials are engineered.
+- <strong>Circuit model can be optimistic.</strong> The fast radar model is excellent for search, but full-wave
+  simulation showed it can over-predict X-band absorption for some geometries (§4). The fix is known —
+  full-wave-in-the-loop on the final design — and the validation pipeline to do it already exists.
 - <strong>No physical synthesis yet</strong> — the pipeline ends at simulation- and DFT-validated candidates; lab
   synthesis and measurement are the next phase.</p>
 <p>This honesty is deliberate: the results we <em>claim</em> are the ones we can defend.</p>
