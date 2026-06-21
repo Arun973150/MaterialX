@@ -121,6 +121,8 @@ def discovered_radar_layer(candidates_parquet=None):
     from .em_literature import class_mu_prior
 
     df = pd.read_parquet(candidates_parquet)
+    if "practical" in df.columns:          # never place a toxic/precious/rare-earth radar material
+        df = df[df["practical"]]
     radar = df[df["role"].isin(["radar_conductor", "radar_magnetic"])].sort_values("score", ascending=False)
     if not len(radar):
         return None

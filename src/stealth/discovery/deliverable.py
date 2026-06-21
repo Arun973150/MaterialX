@@ -63,10 +63,20 @@ def _candidates_section() -> list[str]:
     top = practical.sort_values("score", ascending=False).head(5)
     cols = [c for c in ["formula", "role", "score", "e_hull_ev_atom", "manufacturability",
                         "radar_min_rl_db", "ir_emissivity"] if c in top.columns]
-    lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
-    for _, r in top.iterrows():
-        lines.append("| " + " | ".join(str(r[c]) for c in cols) + " |")
-    return [header, ""] + lines + [""]
+
+    def _table(rows):
+        out = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
+        for _, r in rows.iterrows():
+            out.append("| " + " | ".join(str(r[c]) for c in cols) + " |")
+        return out
+
+    sections = [header, ""] + _table(top) + [""]
+    # Best practical candidate PER ROLE — the multispectral discovery story (one per layer).
+    if "role" in practical.columns:
+        best = (practical.sort_values("score", ascending=False)
+                .drop_duplicates(subset="role"))
+        sections += ["**Best discovered material per stealth-layer role:**", ""] + _table(best) + [""]
+    return sections
 
 
 def _design_section() -> list[str]:
