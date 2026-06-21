@@ -58,12 +58,20 @@ def build(cif_dir=None, gnnopt_nk=None, top_n=5, prescreen=None, require_practic
 
     # Scale knob: S.U.N. does an MP query + convex-hull build per material (slow). When the
     # generated pool is large, keep only the most-stable `prescreen` by the cheap GNN formation
-    # energy and run the expensive hull/novelty check on those — same shortlist, hours -> minutes.
+    # energy and run the expensive hull/novelty check on those.
+    # PER-ROLE: keep the most-stable N *of each role*, not globally — otherwise the most stable
+    # materials (oxides/fluorides = dielectrics) crowd out conductors/ferrites (higher E_form),
+    # starving the radar/IR layers. Per-role prescreen keeps every stealth role represented.
     if prescreen and len(scr) > prescreen:
-        keep = set(scr.sort_values("eform_per_atom").head(prescreen)["id"])
+        n_roles = max(scr["best_role"].nunique(), 1)
+        per = max(prescreen // n_roles, 8)
+        keep = set()
+        for _, grp in scr.groupby("best_role"):
+            keep |= set(grp.sort_values("eform_per_atom").head(per)["id"])
         structures = [(sid, s) for (sid, s) in structures if sid in keep]
         scr = scr[scr["id"].isin(keep)].reset_index(drop=True)
-        print(f"prescreen: hull-checking the {len(structures)} most stable of {len(keep)} (by GNN E_form)")
+        roles = scr["best_role"].value_counts().to_dict()
+        print(f"prescreen (per-role, ~{per}/role): hull-checking {len(structures)} -> {roles}")
 
     sun = evaluate_sun(structures)                                     # stable/unique/novel/SUN, e_hull
     nk = load_gnnopt_nk(gnnopt_nk) if gnnopt_nk else {}
