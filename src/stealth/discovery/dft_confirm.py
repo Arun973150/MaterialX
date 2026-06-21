@@ -140,12 +140,21 @@ def confirm_structure(structure, fmax: float = 0.05, steps: int = 80) -> dict:
     }
 
 
-def run(cif_dir=None, formulas=None, ids=None) -> list[dict]:
+def run(cif_dir=None, formulas=None, ids=None, from_shortlist=None) -> list[dict]:
     import warnings
 
     from .screen import load_cifs
 
     warnings.filterwarnings("ignore")
+    # auto-pick the novel (SUN) top-N from the saved shortlist, so DFT matches the deliverable
+    if from_shortlist and not ids and not formulas:
+        import pandas as pd
+
+        df = pd.read_parquet(REPO_ROOT / "data" / "final_candidates.parquet")
+        col = "novel" if "novel" in df.columns else "SUN"
+        nov = df[df[col].astype(bool)].sort_values("score", ascending=False)
+        ids = list(nov.head(from_shortlist)["id"])
+        print(f"from-shortlist: DFT-confirming novel top-{len(ids)}: {ids}")
     structs = load_cifs(cif_dir) if cif_dir else []
     pick = []
     for sid, s in structs:
@@ -199,8 +208,8 @@ def write_report(rows, path=REPORT):
     return path
 
 
-def main(cif_dir=None, formulas=None, ids=None):
-    rows = run(cif_dir, formulas, ids)
+def main(cif_dir=None, formulas=None, ids=None, from_shortlist=None):
+    rows = run(cif_dir, formulas, ids, from_shortlist)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(rows, indent=2), encoding="utf-8")
     out = write_report(rows)
@@ -215,5 +224,7 @@ if __name__ == "__main__":
     ap.add_argument("--cif-dir", required=True, help="dir of candidate CIFs (e.g. /workspace/gen/all)")
     ap.add_argument("--formulas", nargs="*", default=None, help="reduced formulas to confirm")
     ap.add_argument("--ids", nargs="*", default=None, help="explicit CIF ids (stems) to confirm")
+    ap.add_argument("--from-shortlist", type=int, default=None,
+                    help="auto-confirm the novel top-N from data/final_candidates.parquet")
     args = ap.parse_args()
-    main(cif_dir=args.cif_dir, formulas=args.formulas, ids=args.ids)
+    main(cif_dir=args.cif_dir, formulas=args.formulas, ids=args.ids, from_shortlist=args.from_shortlist)
