@@ -123,7 +123,18 @@ def discovered_radar_layer(candidates_parquet=None):
     df = pd.read_parquet(candidates_parquet)
     if "practical" in df.columns:          # never place a toxic/precious/rare-earth radar material
         df = df[df["practical"]]
-    radar = df[df["role"].isin(["radar_conductor", "radar_magnetic"])].sort_values("score", ascending=False)
+    radar = df[df["role"].isin(["radar_conductor", "radar_magnetic"])].copy()
+
+    # Require GENUINE radar relevance, so mislabeled wide-gap dielectrics (e.g. SiO2 tagged
+    # radar_magnetic) can't be named the absorber: magnetic role must contain a magnetic
+    # element; conductor role must be low-gap (metallic/lossy).
+    def _radar_relevant(row) -> bool:
+        els = {e.symbol for e in Composition(row["formula"]).elements}
+        if row["role"] == "radar_magnetic":
+            return bool(els & {"Fe", "Co", "Ni", "Mn"})
+        return float(row.get("band_gap_ev", 9.9)) < 1.0   # radar_conductor: conductive/lossy
+
+    radar = radar[radar.apply(_radar_relevant, axis=1)].sort_values("score", ascending=False)
     if not len(radar):
         return None
     top = radar.iloc[0]
