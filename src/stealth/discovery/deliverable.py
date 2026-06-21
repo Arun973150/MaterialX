@@ -49,15 +49,24 @@ def _candidates_section() -> list[str]:
         df = pd.read_parquet(REPO_ROOT / "data" / "final_candidates.parquet")
     except Exception:  # noqa: BLE001
         return ["_Shortlist pending — run `select_candidates` on the generated pool._", ""]
-    practical = df[df["practical"]] if "practical" in df else df
+    # Only claim manufacturability filtering if the parquet actually has the gate column.
+    # An old (pre-gate) parquet must NOT be reported as "excluded" — that would be false.
+    if "practical" in df.columns:
+        practical = df[df["practical"]]
+        header = (f"Manufacturable candidates: **{len(practical)}/{len(df)}** "
+                  "(toxic/precious/rare-earth excluded). Top 5:")
+    else:
+        practical = df
+        header = ("⚠️ _This shortlist is from an earlier run that **predates the manufacturability "
+                  "gate** (no `practical` column) — re-run `select_candidates` for the gated, "
+                  "property-ranked result._\n\n" f"Candidates: **{len(df)}**. Top 5:")
     top = practical.sort_values("score", ascending=False).head(5)
     cols = [c for c in ["formula", "role", "score", "e_hull_ev_atom", "manufacturability",
                         "radar_min_rl_db", "ir_emissivity"] if c in top.columns]
     lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
     for _, r in top.iterrows():
         lines.append("| " + " | ".join(str(r[c]) for c in cols) + " |")
-    return [f"Manufacturable candidates: **{len(practical)}/{len(df)}** (toxic/precious/rare-earth "
-            "excluded). Top 5:", ""] + lines + [""]
+    return [header, ""] + lines + [""]
 
 
 def _design_section() -> list[str]:
