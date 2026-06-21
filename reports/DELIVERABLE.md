@@ -14,12 +14,22 @@ End-to-end AI pipeline that **discovers novel, manufacturable materials** and **
 _Predictors not trained yet — run `predictors --train` on the pod (expected JARVIS-ML MAE: refractive index ~0.5, moduli ~10 GPa)._
 
 ## Candidate shortlist (#6 manufacturable)
-Manufacturable candidates: **4/4** (toxic/precious/rare-earth excluded). Top 5:
+⚠️ _This shortlist is from an earlier run that **predates the manufacturability gate** (no `practical` column) — re-run `select_candidates` for the gated, property-ranked result._
+
+Candidates: **4**. Top 5:
 
 | formula | role | score | e_hull_ev_atom |
 |---|---|---|---|
 | VO2 | radar_conductor | 0.843 | -0.384 |
 | Al | radar_conductor | 0.771 | -0.279 |
+| MgO | dielectric_spacer | 0.75 | -1.035 |
+| TiO2 | ir_phasechange | 0.75 | -0.581 |
+
+**Best discovered material per stealth-layer role:**
+
+| formula | role | score | e_hull_ev_atom |
+|---|---|---|---|
+| VO2 | radar_conductor | 0.843 | -0.384 |
 | MgO | dielectric_spacer | 0.75 | -1.035 |
 | TiO2 | ir_phasechange | 0.75 | -0.581 |
 

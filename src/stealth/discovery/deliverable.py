@@ -89,6 +89,27 @@ def _candidates_section() -> list[str]:
     return sections
 
 
+def _dft_section() -> list[str]:
+    rows = _load_json(REPO_ROOT / "data" / "dft_confirmation.json")
+    if not rows:
+        return []
+    lines = ["## DFT confirmation of the novel candidates (GPAW PBE)", "",
+             "| id | formula | DFT minimum | DFT E_form (eV/atom) | favorable |",
+             "|---|---|---|---|---|"]
+    for r in rows:
+        if "error" in r:
+            lines.append(f"| {r['id']} | {r.get('formula','?')} | ERROR | — | · |")
+        else:
+            lines.append(f"| {r['id']} | {r['formula']} | {'✓' if r.get('dft_minimum') else '·'} | "
+                         f"{r.get('dft_eform_per_atom')} | {'✓' if r.get('favorable') else '·'} |")
+    ok = sum(1 for r in rows if r.get("dft_minimum") and r.get("favorable"))
+    lines += ["",
+              f"**{ok}/{len(rows)} novel candidates DFT-confirmed** (real DFT minimum + favorable "
+              "formation energy) — upgrades these from model-grade to DFT-grade. _MP-consistent E_hull "
+              "(VASP with MP settings) is the further step._", ""]
+    return lines
+
+
 def _design_section() -> list[str]:
     d = _load_json(REPO_ROOT / "data" / "designed_coating.json")
     if not d:
@@ -159,6 +180,7 @@ def build_report(path=OUT) -> "object":
         *_predictor_section(),
         "## Candidate shortlist (#6 manufacturable)",
         *_candidates_section(),
+        *_dft_section(),
         "## Designed coating (all three bands)",
         *_design_section(),
         "## Validation evidence",
