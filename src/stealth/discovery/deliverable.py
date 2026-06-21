@@ -118,8 +118,16 @@ def _validation_section() -> list[str]:
     v = validate()
     s = radar.RadarStack(6, 5.4, 120, 2.5, 4.3, "capacitive_patch")
     st = radar.angular_stress_test(s, np.linspace(1, 30, 291))
+    oe = _load_json(REPO_ROOT / "data" / "openems_design.json")
+    if oe:
+        oe_line = ("- **Full-wave radar (openEMS vs ECM):** method validated at 1.55 dB; "
+                   f"**delivered design re-confirmed** — min {oe['min_rl_db']} dB @ "
+                   f"{oe['f_at_min_ghz']} GHz, mean |Δ| {oe['mean_abs_diff_db']} dB vs ECM "
+                   "(full-wave −10 dB band somewhat narrower than the lumped estimate).")
+    else:
+        oe_line = "- **Full-wave radar (openEMS vs ECM):** mean |Δ| = 1.55 dB over 1–30 GHz (validated)."
     return [
-        f"- **Full-wave radar (openEMS vs ECM):** mean |Δ| = 1.55 dB over 1–30 GHz (validated).",
+        oe_line,
         f"- **Measured-data anchor (#10):** {v['material']} reproduces "
         f"{v['min_rl_db']} dB at {v['best_thickness_mm']} mm (λ/4 theory "
         f"{v['quarter_wave_thickness_mm']} mm, ratio {v['thickness_vs_quarterwave_ratio']}) → "

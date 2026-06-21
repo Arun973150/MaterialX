@@ -182,6 +182,20 @@ def compare(stack: RadarStack | None = None, f_ghz: np.ndarray | None = None) ->
     print(df.to_string(index=False))
     print(f"\nMean |openEMS - ECM| = {np.mean(np.abs(ems - ecm)):.2f} dB   "
           f"(min openEMS {ems.min():.1f} dB @ {f[np.argmin(ems)]:.1f} GHz)")
+
+    # Save a summary so the deliverable can cite the per-design full-wave confirmation.
+    # (Local REPO_ROOT — avoids importing stealth.config, which may need deps absent in the
+    # openEMS venv.)
+    import json
+    from pathlib import Path
+
+    out = Path(__file__).resolve().parents[3] / "data" / "openems_design.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
+        "mean_abs_diff_db": round(float(np.mean(np.abs(ems - ecm))), 2),
+        "min_rl_db": round(float(ems.min()), 1),
+        "f_at_min_ghz": round(float(f[np.argmin(ems)]), 1),
+    }, indent=2), encoding="utf-8")
     return df
 
 

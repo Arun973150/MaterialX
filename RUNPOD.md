@@ -163,6 +163,15 @@ PYTHONPATH=src python -m stealth.discovery.anchor          # measured-data ancho
 PYTHONPATH=src python -m stealth.discovery.deliverable     # -> reports/DELIVERABLE.md
 ```
 
+## openEMS after a restart — reinstall its apt libraries
+A container restart wipes apt packages (only `/workspace` persists), so the built openEMS can't
+find its system libs (`libtinyxml`, `VTK`, `Boost`, `HDF5`, …) and import fails with
+`ImportError: lib*.so: cannot open shared object file`. Reinstall them in one shot:
+```bash
+apt-get update && apt-get install -y libboost-all-dev libvtk9.1 libhdf5-dev libcgal-dev libtinyxml2.6.2v5
+```
+(If a stray lib is still missing: `ldd $(find /workspace/openems-venv -name "*.so" | grep -iE "openEMS|CSXCAD" | head -3) | grep "not found"` and install it.) `radar_fullwave --design --compare` then writes `data/openems_design.json`, which the deliverable cites as the per-design full-wave confirmation.
+
 ## Re-provisioning after a restart
 A pod restart wipes the container but keeps `/workspace`. To rebuild the base env in one command:
 ```bash
