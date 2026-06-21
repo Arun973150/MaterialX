@@ -51,11 +51,21 @@ _ELEMENT_REF = {
 
 
 def _calc(pw: float = 500.0, kpts=(3, 3, 3), spin: bool = False):
-    """A GPAW plane-wave PBE calculator (kept in one place so settings stay consistent)."""
+    """A GPAW plane-wave PBE calculator (kept in one place so settings stay consistent).
+
+    Wider Fermi smearing + an SCF iteration cap keep metallic / magnetic transition-metal
+    systems from grinding forever — a non-converging SCF raises instead of hanging.
+    """
     from gpaw import GPAW, PW
 
-    return GPAW(mode=PW(pw), xc="PBE", kpts=kpts, txt=None,
-                spinpol=spin, occupations={"name": "fermi-dirac", "width": 0.05})
+    return GPAW(mode=PW(pw), xc="PBE", kpts=kpts, txt=None, spinpol=spin,
+                occupations={"name": "fermi-dirac", "width": 0.1},
+                maxiter=200, convergence={"energy": 5e-4, "density": 1e-3})
+
+
+# magnetic transition metals -> spin-polarize + seed initial moments so the SCF converges
+_MAGNETIC_ELEMENTS = {"Mn", "Fe", "Co", "Ni", "Cr", "V"}
+_INIT_MAGMOM = {"Mn": 5.0, "Fe": 4.0, "Co": 3.0, "Ni": 2.0, "Cr": 5.0, "V": 3.0, "Mo": 1.0, "Ti": 1.0}
 
 
 def formation_energy_per_atom(e_total: float, comp, elem_ref_per_atom: dict) -> float:
@@ -106,7 +116,11 @@ def confirm_structure(structure, fmax: float = 0.05, steps: int = 80) -> dict:
 
     atoms = AseAtomsAdaptor.get_atoms(structure)
     start = atoms.get_positions().copy()
-    atoms.calc = _calc(kpts=(3, 3, 3))
+    # spin-polarize magnetic transition-metal candidates (else SCF won't converge)
+    magnetic = any(a.symbol in _MAGNETIC_ELEMENTS for a in atoms)
+    if magnetic:
+        atoms.set_initial_magnetic_moments([_INIT_MAGMOM.get(a.symbol, 0.0) for a in atoms])
+    atoms.calc = _calc(kpts=(3, 3, 3), spin=magnetic)
     opt = LBFGS(atoms, logfile=None)
     opt.run(fmax=fmax, steps=steps)
     converged = bool(opt.converged())
@@ -152,6 +166,8 @@ def run(cif_dir=None, formulas=None, ids=None) -> list[dict]:
             print(f"  failed: {exc}")
         rows.append(r)
         print(f"  -> {r}")
+        OUT.parent.mkdir(parents=True, exist_ok=True)         # incremental save: a hang/kill
+        OUT.write_text(json.dumps(rows, indent=2), encoding="utf-8")  # never loses finished ones
     return rows
 
 
