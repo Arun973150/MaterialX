@@ -13,6 +13,7 @@ dynamic = ["dependencies"]
 # #1 dataset (Tier A) ingestion + #3 predictor training (run on the pod)
 data = ["jarvis-tools>=2024.1.1"]
 train = ["jarvis-tools>=2024.1.1", "scikit-learn>=1.3", "lightgbm>=4.0", "joblib>=1.3"]
+dft = ["gpaw>=24.1"]   # DFT confirmation of the novel shortlist (needs gpaw install-data + libxc)
 
 [tool.setuptools]
 package-dir = {"" = "src"}
